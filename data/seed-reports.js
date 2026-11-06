@@ -6,7 +6,11 @@
  *    để người dùng lọc theo từng kênh và chạy So Sánh Đa Kênh (Multi-Channel Comparison) ngay lập tức.
  */
 
-import { calculateQuantitativeStats } from '../src/stats-calculator.js';
+import {
+  calculateQuantitativeStats,
+  analyzeSinglePostContent,
+  summarizeWinningContent,
+} from '../src/stats-calculator.js';
 import {
   classifyPostsAndAdsDeterministically,
   buildFull13SectionsObject,
@@ -1039,27 +1043,80 @@ function generatePostsForChannel(
     const dateForWd = new Date(isoDate);
     const wd = weekdays[dateForWd.getDay()];
     const topic = topics[(i - 1) % topics.length];
-    const isVideo =
-      platform === 'tiktok' ||
-      platform === 'youtube' ||
-      platform === 'shopee' ||
-      i % 2 === 0;
 
-    const views = isVideo ? Math.round(baseViews * (0.45 + ((i * 19) % 175) / 100)) : 0;
-    const reactions = Math.round(baseReactions * (0.4 + ((i * 13) % 160) / 100));
-    const comments = Math.round(baseReactions * 0.28 * (0.3 + ((i * 7) % 150) / 100));
-    const shares = Math.max(1, Math.round(baseReactions * 0.09 * (((i * 5) % 130) / 100)));
+    let format = 'Reel';
+    let isVideo = true;
+    if (platform === 'tiktok') {
+      format = i % 7 === 0 ? 'TikTok Photo Mode' : i % 9 === 0 ? 'TikTok LIVE Teaser' : 'TikTok Video';
+      isVideo = format !== 'TikTok Photo Mode';
+    } else if (platform === 'instagram') {
+      format = i % 3 === 0 ? 'IG Carousel (Lookbook)' : i % 8 === 0 ? 'IG Photo' : 'IG Reel';
+      isVideo = format === 'IG Reel';
+    } else if (platform === 'threads') {
+      format =
+        i % 4 === 0
+          ? 'Thread Kèm Ảnh'
+          : i % 5 === 0
+            ? 'Thread Hỏi đáp (Q&A)'
+            : 'Thread Thảo luận (Text)';
+      isVideo = false;
+    } else if (platform === 'youtube') {
+      format = i % 4 === 0 ? 'YouTube Video Dài' : 'YouTube Shorts';
+      isVideo = true;
+    } else if (platform === 'shopee') {
+      format = i % 5 === 0 ? 'Shopee Live Highlight' : 'Shopee Video Gắn Giỏ Hàng';
+      isVideo = true;
+    } else {
+      isVideo = i % 2 === 0;
+      format = isVideo ? 'Reel' : 'Nhiều ảnh';
+    }
+
+    // Tạo phân phối thực tế có các bài SUPER WIN (Top 12%) & CONTENT WIN (Top 28%)
+    const isSuperWinSlot = [1, 3, 6, 11, 16, 22, 29, 36, 45, 54].includes(i);
+    const isContentWinSlot = [2, 5, 9, 14, 19, 25, 31, 39, 48, 58, 65].includes(i);
+    const winMultiplier = isSuperWinSlot ? 2.35 + (i % 5) * 0.22 : isContentWinSlot ? 1.48 + (i % 4) * 0.12 : 0.72 + ((i * 11) % 45) / 100;
+
+    const hasViews =
+      isVideo || platform === 'tiktok' || platform === 'threads' || platform === 'instagram';
+    const rawViews = hasViews
+      ? Math.round(baseViews * (isVideo ? 1.0 : 0.62) * winMultiplier)
+      : 0;
+    const reactions = Math.round(baseReactions * winMultiplier * (0.85 + ((i * 7) % 35) / 100));
+    const commentsBoost =
+      /comment|chấm|hỏi thật|có mom nào|live|đồng giá|giỏ hàng/i.test(topic.caption) ? 1.45 : 1.0;
+    const sharesBoost =
+      /pov:|tâm sự|cẩm nang|hồi chưa bầu|góc hỏi thật|biến hóa/i.test(topic.caption) ? 1.65 : 1.0;
+
+    const comments = Math.max(
+      2,
+      Math.round(baseReactions * 0.32 * winMultiplier * commentsBoost * (0.7 + ((i * 5) % 60) / 100))
+    );
+    const shares = Math.max(
+      1,
+      Math.round(baseReactions * 0.11 * winMultiplier * sharesBoost * (0.65 + ((i * 3) % 70) / 100))
+    );
+
+    const platformTag =
+      platform === 'tiktok'
+        ? '#TikTokShop #XuHuong #ReviewThucTe'
+        : platform === 'instagram'
+          ? '#OOTD #Lookbook #MaternityStyle'
+          : platform === 'threads'
+            ? '#ThreadsVN #TamSuMeBau #HoiDap'
+            : platform === 'shopee'
+              ? '#ShopeeVideo #SanDeal #Voucher25'
+              : '#Trending #ReviewThucTe';
 
     posts.push({
       index: i,
       id: `${platform}_post_${i}`,
-      format: isVideo ? (platform === 'youtube' ? 'Video' : 'Reel') : 'Nhiều ảnh',
+      format,
       publishedAt: `${wd}, ${dayStr}/${mm}/${yyyy} lúc ${hourStr}:${minStr}:00`,
       isoDate,
       url: `#post-${i}`,
-      caption: `${topic.caption}\n#${channelName.replace(/[^a-zA-Z0-9]/g, '')} #Trending #ReviewThucTe`,
-      mediaCount: isVideo ? 1 : 4,
-      views,
+      caption: `${topic.caption}\n#${channelName.replace(/[^a-zA-Z0-9]/g, '')} ${platformTag}`,
+      mediaCount: isVideo ? 1 : platform === 'threads' ? (format.includes('Ảnh') ? 2 : 1) : 4,
+      views: rawViews,
       reactions,
       comments,
       shares,
@@ -1137,15 +1194,21 @@ function buildMultiPlatformSeedReport({
     createdAt,
   };
   const stats = calculateQuantitativeStats(posts, ads, { from: dateFrom, to: dateTo });
-  const classified = classifyPostsAndAdsDeterministically(posts, ads, followers);
-  const aiAnalysis = buildFull13SectionsObject(channel, posts, ads, stats, classified, null);
+  const enrichedPosts = posts.map((p) => ({
+    ...p,
+    contentAudit: analyzeSinglePostContent(p, stats.averages, followers, platform),
+  }));
+  const winningSummary = summarizeWinningContent(enrichedPosts, stats.averages, followers, platform);
+  const classified = classifyPostsAndAdsDeterministically(enrichedPosts, ads, followers);
+  const aiAnalysis = buildFull13SectionsObject(channel, enrichedPosts, ads, stats, classified, null);
 
   return {
     id,
     channel,
-    posts,
+    posts: enrichedPosts,
     ads,
     stats,
+    winningSummary,
     aiAnalysis,
   };
 }
@@ -1547,8 +1610,212 @@ export function getSeedReports() {
         caption: 'Góc hỏi thật các mẹ bầu công sở: Đi làm mùa thu đông các mom thích mặc váy len suông hơn hay mặc yếm phối áo giữ nhiệt hơn ạ?',
         transcript: null,
       },
+      {
+        caption: 'Tâm sự thật lòng: Bầu tháng thứ 7 tăng 10kg nhìn vào gương đôi khi tủi thân ghê, nhưng hôm nay diện chiếc đầm suông chữ A đi làm được cả phòng khen gọn gàng tự nhiên thấy yêu đời hẳn các mom ạ 🌷',
+        transcript: null,
+      },
+      {
+        caption: 'Mình tổng hợp 4 tiêu chí chọn đồ bầu mặc được tới tận sau sinh cho các mom tập đầu đỡ tốn tiền mua đi mua lại nhé: (1) Chiết eo cao trên rốn, (2) Có khóa ti ẩn hoặc cúc ngực, (3) Vải có lót mềm, (4) Quần cạp chun chỉnh nấc!',
+        transcript: null,
+      },
     ]),
     ads: generateAdsForChannel("L'AMME Threads", 8, 'Send message'),
+  });
+
+  // 8. MDU Fashion trên TikTok
+  const report8MduTiktok = buildMultiPlatformSeedReport({
+    id: 'rep-mdufashion-tiktok-202610',
+    name: 'MDU Fashion Official (@mdufashion.vn)',
+    platform: 'tiktok',
+    url: 'https://www.tiktok.com/@mdufashion.vn',
+    category: 'Fashion Designer (TikTok Shop)',
+    followers: 386000,
+    rating: '4.9/5.0',
+    posts: generatePostsForChannel(
+      'MDU Fashion TikTok',
+      'tiktok',
+      86,
+      34500,
+      980,
+      KNOWN_COMPETITOR_PROFILES['mdufashion.01'].topics
+    ),
+    ads: generateAdsForChannel('MDU Fashion TikTok', 36, 'Shop now'),
+  });
+
+  // 9. MEGAU Vietnam trên TikTok
+  const report9MegauTiktok = buildMultiPlatformSeedReport({
+    id: 'rep-megau-tiktok-202610',
+    name: 'Mẹ Gấu MEGAU Official (@megau.vietnam)',
+    platform: 'tiktok',
+    url: 'https://www.tiktok.com/@megau.vietnam',
+    category: 'Maternity & Postpartum TikTok Shop',
+    followers: 412000,
+    rating: '4.9/5.0',
+    posts: generatePostsForChannel(
+      'MEGAU TikTok',
+      'tiktok',
+      94,
+      31200,
+      910,
+      KNOWN_COMPETITOR_PROFILES.megauvietnam.topics
+    ),
+    ads: generateAdsForChannel('MEGAU TikTok Shop', 40, 'Shop now'),
+  });
+
+  // 10. Glamnest — Nàng Bầu 4.0 trên TikTok
+  const report10GlamnestTiktok = buildMultiPlatformSeedReport({
+    id: 'rep-glamnest-tiktok-202610',
+    name: 'Glamnest — Nàng Bầu 4.0 (@glamnest.official)',
+    platform: 'tiktok',
+    url: 'https://www.tiktok.com/@glamnest.official',
+    category: 'Maternity Fashion Designer',
+    followers: 228000,
+    rating: '4.9/5.0',
+    posts: generatePostsForChannel(
+      'Glamnest TikTok',
+      'tiktok',
+      78,
+      26400,
+      780,
+      KNOWN_COMPETITOR_PROFILES['glamnest.mom.outfits'].topics
+    ),
+    ads: generateAdsForChannel('Glamnest TikTok', 28, 'Shop now'),
+  });
+
+  // 11. Celeste Studio trên Instagram
+  const report11CelesteIg = buildMultiPlatformSeedReport({
+    id: 'rep-celeste-ig-202610',
+    name: 'Celeste Studio (@celestestudio.vn)',
+    platform: 'instagram',
+    url: 'https://www.instagram.com/celestestudio.vn',
+    category: 'Women & Maternity Friendly Studio',
+    followers: 176400,
+    rating: '4.9/5.0',
+    posts: generatePostsForChannel(
+      'Celeste Instagram',
+      'instagram',
+      68,
+      16800,
+      245,
+      KNOWN_COMPETITOR_PROFILES.celestestudio8.topics
+    ),
+    ads: generateAdsForChannel('Celeste Instagram', 24, 'Send message'),
+  });
+
+  // 12. Sachi Mom trên Instagram
+  const report12SachiIg = buildMultiPlatformSeedReport({
+    id: 'rep-sachimom-ig-202610',
+    name: 'Sachi Mom Official (@sachimom.vn)',
+    platform: 'instagram',
+    url: 'https://www.instagram.com/sachimom.vn',
+    category: 'Premium Maternity Fashion',
+    followers: 158000,
+    rating: '4.9/5.0',
+    posts: generatePostsForChannel(
+      'Sachi Mom IG',
+      'instagram',
+      72,
+      17400,
+      260,
+      KNOWN_COMPETITOR_PROFILES['sachimom.official'].topics
+    ),
+    ads: generateAdsForChannel('Sachi Mom IG', 26, 'Send message'),
+  });
+
+  // 13. MEGAU Vietnam trên Threads
+  const report13MegauThreads = buildMultiPlatformSeedReport({
+    id: 'rep-megau-threads-202610',
+    name: 'Mẹ Gấu MEGAU (@megau.vn) - Threads',
+    platform: 'threads',
+    url: 'https://www.threads.net/@megau.vn',
+    category: 'Maternity Community & Brand',
+    followers: 62500,
+    rating: 'N/A',
+    posts: generatePostsForChannel('MEGAU Threads', 'threads', 70, 8400, 195, [
+      {
+        caption: 'Hỏi thật các mom sắp vỡ chum: Giỏ đồ đi sinh của các mom có mấy bộ đồ mở cúc/khóa ẩn cho bé ti vậy ạ? Nhớ hồi sinh bé đầu mình mang nhầm đầm chui đầu vào viện bất tiện vô cùng 😭',
+        transcript: null,
+      },
+      {
+        caption: 'POV: Khi mẹ bầu 30 tuổi quyết tâm không mặc đồ bầu thùng thình của thập niên cũ nữa mà chuyển sang hệ đầm vest bầu công sở Mẹ Gấu — đi họp khách hàng ai cũng khen thần thái!',
+        transcript: null,
+      },
+      {
+        caption: 'Cẩm nang chọn đồ bộ ở cữ mùa Thu Đông cho các mẹ bỉm: Chọn vải cotton đũi mềm thoáng khí, có khóa mở ngực 2 bên và quần có chun điều chỉnh theo vòng bụng sau sinh nhé các mom 🐻',
+        transcript: null,
+      },
+      {
+        caption: 'Có mom nào bầu 6 tháng rồi mà vẫn thích mặc váy suông 2-trong-1 để sinh xong tận dụng mặc đi làm tiếp giống em không? Điểm danh dưới comment chia sẻ kinh nghiệm tiết kiệm đi các mom!',
+        transcript: null,
+      },
+    ]),
+    ads: generateAdsForChannel('MEGAU Threads', 10, 'Send message'),
+  });
+
+  // 14. Glamnest trên Threads
+  const report14GlamnestThreads = buildMultiPlatformSeedReport({
+    id: 'rep-glamnest-threads-202610',
+    name: 'Glamnest Nàng Bầu 4.0 (@glamnest.vn) - Threads',
+    platform: 'threads',
+    url: 'https://www.threads.net/@glamnest.vn',
+    category: 'Maternity Style Community',
+    followers: 48900,
+    rating: 'N/A',
+    posts: generatePostsForChannel('Glamnest Threads', 'threads', 64, 7600, 175, [
+      {
+        caption: 'Góc hỏi thật hội Nàng Bầu 4.0: Đi đám cưới khi đang bầu 7 tháng các mom sợ nhất điều gì? Riêng khách nhà Glamnest sợ nhất là mua váy bầu may sẵn bị rộng vai và ngắn tà trước 😂',
+        transcript: null,
+      },
+      {
+        caption: 'Tâm sự nghề làm đồ bầu thiết kế: Mỗi tuần xưởng Glamnest ở 84 Hào Nam nhận hàng trăm ca hạ eo, nới ngực, chỉnh chiều dài váy miễn phí theo từng tuần thai cho các mom. Thấy các mẹ bầu tự tin tỏa sáng là bao mệt mỏi tan biến hết ✨',
+        transcript: null,
+      },
+      {
+        caption: 'Bật mí 3 chất liệu "chân ái" cho mẹ bầu nhạy cảm không bao giờ lo dặm ngứa: Tơ sống lót lụa habutai, Linen tưng mềm đã xử lý wash, và Cotton tăm Hàn co giãn 4 chiều!',
+        transcript: null,
+      },
+    ]),
+    ads: generateAdsForChannel('Glamnest Threads', 8, 'Send message'),
+  });
+
+  // 15. B2MUM trên Shopee Video
+  const report15B2mumShopee = buildMultiPlatformSeedReport({
+    id: 'rep-b2mum-shopee-202610',
+    name: 'B2MUM Official Store (Shopee Video)',
+    platform: 'shopee',
+    url: 'https://shopee.vn/b2mum.official',
+    category: 'Shopee Mall - Đầm Bầu & Sau Sinh',
+    followers: 268000,
+    rating: '4.9/5.0 (39.4k)',
+    posts: generatePostsForChannel(
+      'B2MUM Shopee',
+      'shopee',
+      96,
+      19800,
+      440,
+      KNOWN_COMPETITOR_PROFILES.b2mum.topics
+    ),
+    ads: generateAdsForChannel('B2MUM Shopee Ads', 28, 'Shop now'),
+  });
+
+  // 16. MDU Fashion trên YouTube Shorts & Lookbook
+  const report16MduYoutube = buildMultiPlatformSeedReport({
+    id: 'rep-mdufashion-yt-202610',
+    name: 'MDU Fashion Lookbook & Shorts',
+    platform: 'youtube',
+    url: 'https://www.youtube.com/@mdufashion',
+    category: 'Fashion Designer Channel',
+    followers: 92400,
+    rating: '4.9/5.0',
+    posts: generatePostsForChannel(
+      'MDU YouTube',
+      'youtube',
+      48,
+      24600,
+      360,
+      KNOWN_COMPETITOR_PROFILES['mdufashion.01'].topics
+    ),
+    ads: generateAdsForChannel('MDU YouTube Ads', 14, 'Shop now'),
   });
 
   return [
@@ -1559,5 +1826,14 @@ export function getSeedReports() {
     report5LammeYt,
     report6LammeShopee,
     report7LammeThreads,
+    report8MduTiktok,
+    report9MegauTiktok,
+    report10GlamnestTiktok,
+    report11CelesteIg,
+    report12SachiIg,
+    report13MegauThreads,
+    report14GlamnestThreads,
+    report15B2mumShopee,
+    report16MduYoutube,
   ];
 }

@@ -7,6 +7,7 @@ import {
   calculateQuantitativeStats,
   filterPostsAndAdsByDateRange,
   analyzeSinglePostContent,
+  summarizeWinningContent,
 } from './src/stats-calculator.js';
 import {
   scrapeChannelData,
@@ -19,6 +20,7 @@ import {
   generate13SectionsWithGemini,
   compareChannelsWithGemini,
   analyzePostDeepWithGemini,
+  enrichSimulatedPostsWithGemini,
 } from './src/gemini-service.js';
 import {
   getSeedReports,
@@ -161,23 +163,43 @@ function enrichReportPostsWithContentAudit(report) {
   if (!report || !Array.isArray(report.posts)) return report;
   const averages = report.stats?.averages || {};
   const followers = report.channel?.followers || 100000;
+  const platform = report.channel?.platform || 'facebook';
   const enrichedPosts = report.posts.map((p) => ({
     ...p,
-    contentAudit: p.contentAudit || analyzeSinglePostContent(p, averages, followers),
+    contentAudit:
+      p.contentAudit?.winGoal
+        ? p.contentAudit
+        : analyzeSinglePostContent(p, averages, followers, platform),
   }));
+  const winningSummary = summarizeWinningContent(enrichedPosts, averages, followers, platform);
   return {
     ...report,
     posts: enrichedPosts,
+    winningSummary,
   };
 }
 
 function summarizeReportForList(r) {
+  const averages = r.stats?.averages || {};
+  const followers = r.channel?.followers || 100000;
+  const platform = r.channel?.platform || 'facebook';
+  const winSummary =
+    r.winningSummary || summarizeWinningContent(r.posts || [], averages, followers, platform);
+
   return {
     id: r.id,
     channel: r.channel,
     postsCount: r.posts?.length || 0,
     adsCount: r.ads?.length || 0,
     stats: r.stats,
+    winningSummary: {
+      totalWinPosts: winSummary.totalWinPosts,
+      superWinCount: winSummary.superWinCount,
+      highWinCount: winSummary.highWinCount,
+      winRatePct: winSummary.winRatePct,
+      bestPillarName: winSummary.bestPillar?.name || '',
+      bestHookName: winSummary.bestHook?.name || '',
+    },
     funnelSummary: {
       tofu: r.aiAnalysis?.marketingFunnel?.tofu?.count || 0,
       mofu: r.aiAnalysis?.marketingFunnel?.mofu?.count || 0,
@@ -400,6 +422,11 @@ const server = http.createServer(async (req, res) => {
           dateTo,
           limit: Number(limit || 45),
         });
+        scrapedData = await enrichSimulatedPostsWithGemini(
+          scrapedData,
+          cfg.geminiApiKey,
+          cfg.geminiModel
+        );
       }
 
       const stats = calculateQuantitativeStats(scrapedData.posts, scrapedData.ads, {
@@ -583,14 +610,19 @@ const server = http.createServer(async (req, res) => {
         to: effectiveTo,
       });
 
+      const pf = report.channel?.platform || 'facebook';
+      const avgForSub = subStats.averages || report.stats?.averages || {};
+      const flwForSub = report.channel?.followers || 100000;
       const enrichedFilteredPosts = filteredPosts.map((p) => ({
         ...p,
-        contentAudit: analyzeSinglePostContent(
-          p,
-          subStats.averages || report.stats?.averages || {},
-          report.channel?.followers || 100000
-        ),
+        contentAudit: analyzeSinglePostContent(p, avgForSub, flwForSub, pf),
       }));
+      const subWinningSummary = summarizeWinningContent(
+        enrichedFilteredPosts,
+        avgForSub,
+        flwForSub,
+        pf
+      );
 
       let subAiAnalysis = report.aiAnalysis;
       if (runAi || filteredPosts.length > 0) {
@@ -624,6 +656,7 @@ const server = http.createServer(async (req, res) => {
           posts: enrichedFilteredPosts,
           ads: filteredAds,
           stats: subStats,
+          winningSummary: subWinningSummary,
           aiAnalysis: subAiAnalysis,
         },
       });

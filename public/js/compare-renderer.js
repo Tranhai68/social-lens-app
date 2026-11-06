@@ -234,6 +234,24 @@ export function renderCompareView(container, allReports = [], selectedIds = [], 
                 })
                 .join('')}
             </tr>
+            <tr style="background:#f0fdf4;">
+              <td><strong>🏆 Số lượng Bài WIN &amp; Tỷ lệ Win Rate (%)</strong></td>
+              ${activeReports
+                .map((r) => {
+                  const ws = r.winningSummary || {};
+                  return `<td class="num"><strong style="color:#047857;">${ws.totalWinCount || 0} bài WIN (${ws.winRatePct || 0}%)</strong><div style="font-size:11px; color:var(--text-secondary);">🏆 ${ws.superWinCount || 0} Super Win · 🔥 ${ws.contentWinCount || 0} Content Win</div></td>`;
+                })
+                .join('')}
+            </tr>
+            <tr style="background:#f0fdf4;">
+              <td><strong>🔥 Tuyến Nội dung (Pillar) &amp; Hook WIN #1</strong></td>
+              ${activeReports
+                .map((r) => {
+                  const ws = r.winningSummary || {};
+                  return `<td class="num"><div style="font-weight:700; color:#065f46; font-size:12px;">${escapeHtml(ws.topWinPillar?.name || 'Giải quyết Nỗi đau')} (${ws.topWinPillar?.winRate || 0}%)</div><div style="font-size:11px; color:var(--text-secondary);">Hook: ${escapeHtml(ws.topWinHook?.name || 'Câu hỏi / Phản biện')}</div></td>`;
+                })
+                .join('')}
+            </tr>
           </tbody>
         </table>
       </div>

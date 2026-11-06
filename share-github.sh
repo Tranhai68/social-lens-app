@@ -26,3 +26,4 @@ rm -rf "$TMP_DIR"
 
 echo "✅ Hoàn tất! Mọi người có thể truy cập trực tiếp tại:"
 echo "👉 https://tranhai68.github.io/social-lens-app/"
+

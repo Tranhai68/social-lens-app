@@ -322,18 +322,23 @@ async function openDeepPostAuditModal(reportId, postObj) {
         <!-- 1. Tóm tắt Chỉ số & Xếp hạng Hiệu quả -->
         <div class="sl-formula-card" style="background:var(--bg-page);">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-            <div>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <span class="sl-tier-badge ${escapeHtml(audit.tierClass || 'standard')}" style="font-size:13px; padding:4px 12px;">
-                Điểm Hiệu Quả: ${audit.score || 70}/100 · ${escapeHtml(audit.tier || 'Ổn định')}
+                ${escapeHtml(audit.winBadgeLabel || audit.tier || 'Ổn định')} · ${audit.score || 70}/100
               </span>
-              <span class="sl-m-badge" style="margin-left:6px;">ER: <strong>${escapeHtml(audit.er || '0.35%')}</strong></span>
+              ${
+                audit.isWin
+                  ? `<span style="font-size:12px; font-weight:800; color:#047857; background:#ecfdf5; border:1px solid #a7f3d0; padding:3px 9px; border-radius:999px;">🎯 ${escapeHtml(audit.winGoal || 'Nội dung WIN')}</span>`
+                  : ''
+              }
+              <span class="sl-m-badge">ER: <strong>${escapeHtml(audit.er || '0.35%')}</strong></span>
             </div>
             <div style="font-size:12.5px; color:var(--text-secondary);">
-              👁️ <strong>${fmtNum(postObj.views || 0)}</strong> views · 👍 <strong>${fmtNum(postObj.reactions || 0)}</strong> reactions · 💬 <strong>${fmtNum(postObj.comments || 0)}</strong> bình luận · ↗️ <strong>${fmtNum(postObj.shares || 0)}</strong> chia sẻ
+              👁️ <strong>${fmtNum(postObj.views || 0)}</strong> views (${audit.viewsMultiplier || 1.0}x TB) · 👍 <strong>${fmtNum(postObj.reactions || 0)}</strong> · 💬 <strong>${fmtNum(postObj.comments || 0)}</strong> · ↗️ <strong>${fmtNum(postObj.shares || 0)}</strong>
             </div>
           </div>
           <div style="font-size:13px; color:var(--text-main);">
-            <strong>📊 Đánh giá tổng quát:</strong> ${escapeHtml(effEval.overallVerdict || audit.verdict || '')}
+            <strong>🧬 Giải mã hiệu quả &amp; Lý do WIN:</strong> ${escapeHtml(audit.whyItWon || effEval.overallVerdict || audit.verdict || '')}
           </div>
         </div>
 
@@ -544,6 +549,21 @@ function renderHubGrid() {
                 <span class="hub-kpi-val">${fmtNum(r.stats?.totals?.totalInteractions)}</span>
               </div>
             </div>
+
+            ${
+              r.winningSummary
+                ? `
+              <div style="margin-bottom:10px; padding:7px 10px; border-radius:6px; background:#f0fdf4; border:1px solid #bbf7d0; font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span style="font-weight:800; color:#065f46;">
+                  🏆 ${r.winningSummary.totalWinCount || 0} Bài WIN (${r.winningSummary.winRatePct || 0}% Win Rate)
+                </span>
+                <span style="font-size:11.2px; color:#047857; font-weight:600;">
+                  🔥 Pillar #1: ${escapeHtml(r.winningSummary.topWinPillar?.name || 'Giải quyết Nỗi đau')}
+                </span>
+              </div>
+            `
+                : ''
+            }
 
             <div class="hub-card-summary">
               ${escapeHtml(r.executiveSummary || '')}

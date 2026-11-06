@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeSinglePostContent } from '../src/stats-calculator.js';
+import { analyzeSinglePostContent, summarizeWinningContent } from '../src/stats-calculator.js';
 import { compareChannelsWithGemini } from '../src/gemini-service.js';
+import { getSeedReports } from '../data/seed-reports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,20 +61,75 @@ async function main() {
   }
 
   const rawReports = JSON.parse(fs.readFileSync(REPORTS_FILE, 'utf8'));
-  const enrichedReports = rawReports.map((r) => {
-    const averages = r.stats?.averages || {};
+  const seedReports = getSeedReports();
+  const seedMap = new Map(seedReports.map((sr) => [sr.id, sr]));
+
+  // Đồng bộ các báo cáo đa nền tảng mới (TikTok, IG, Threads, Shopee, YouTube) và làm giàu Winning Content
+  const mergedReports = [];
+  const seenIds = new Set();
+
+  for (const r of rawReports) {
+    seenIds.add(r.id);
+    const seedMatch = seedMap.get(r.id);
+    // Nếu là kênh non-FB của L'AMME từ bản seed cũ, cập nhật bộ bài viết chuẩn đa nền tảng mới
+    const postsSource =
+      seedMatch && r.channel?.platform !== 'facebook' ? seedMatch.posts : r.posts || [];
+    const statsObj = seedMatch && r.channel?.platform !== 'facebook' ? seedMatch.stats : r.stats;
+    const averages = statsObj?.averages || {};
     const followers = r.channel?.followers || 100000;
-    const posts = (r.posts || []).map((p) => {
-      const baseAudit = p.contentAudit || analyzeSinglePostContent(p, averages, followers);
+    const platform = r.channel?.platform || 'facebook';
+
+    const enrichedPosts = postsSource.map((p) => {
+      const baseAudit = analyzeSinglePostContent(p, averages, followers, platform);
       return {
         ...p,
-        contentAudit: baseAudit.deepAudit ? baseAudit : buildPostDeepAuditFallback(baseAudit, r.channel),
+        contentAudit: p.contentAudit?.deepAudit
+          ? { ...baseAudit, deepAudit: p.contentAudit.deepAudit }
+          : buildPostDeepAuditFallback(baseAudit, r.channel),
       };
     });
+
+    const winningSummary = summarizeWinningContent(enrichedPosts, averages, followers, platform);
+    mergedReports.push({
+      ...r,
+      stats: statsObj,
+      posts: enrichedPosts,
+      winningSummary,
+    });
+  }
+
+  for (const sr of seedReports) {
+    if (!seenIds.has(sr.id)) {
+      const averages = sr.stats?.averages || {};
+      const followers = sr.channel?.followers || 100000;
+      const platform = sr.channel?.platform || 'facebook';
+      const enrichedPosts = (sr.posts || []).map((p) => {
+        const baseAudit = analyzeSinglePostContent(p, averages, followers, platform);
+        return {
+          ...p,
+          contentAudit: buildPostDeepAuditFallback(baseAudit, sr.channel),
+        };
+      });
+      const winningSummary = summarizeWinningContent(enrichedPosts, averages, followers, platform);
+      mergedReports.push({
+        ...sr,
+        posts: enrichedPosts,
+        winningSummary,
+      });
+      seenIds.add(sr.id);
+    }
+  }
+
+  // Lưu lại data/reports.json đã nâng cấp đầy đủ đa nền tảng & Winning Content
+  fs.writeFileSync(REPORTS_FILE, JSON.stringify(mergedReports, null, 2), 'utf8');
+
+  const enrichedReports = mergedReports.map((r) => {
+    const posts = r.posts || [];
     return {
       ...r,
       postsCount: posts.length,
       adsCount: (r.ads || []).length,
+      winningSummary: r.winningSummary,
       funnelSummary: {
         tofu: r.aiAnalysis?.marketingFunnel?.tofu?.count || 0,
         mofu: r.aiAnalysis?.marketingFunnel?.mofu?.count || 0,
@@ -117,3 +173,4 @@ async function main() {
 }
 
 main();
+

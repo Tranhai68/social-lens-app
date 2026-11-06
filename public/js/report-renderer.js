@@ -108,19 +108,22 @@ function renderSvgDonutChart(segments = []) {
 }
 
 /**
- * Render 1 thẻ Bài đăng (Post Card) kèm Khung Phân Tích Chuyên Sâu Nội Dung, Câu Hook & Hiệu Quả
+ * Render 1 thẻ Bài đăng (Post Card) kèm Khung Phân Tích Chuyên Sâu Nội Dung, Câu Hook & Đánh giá Nội dung WIN
  */
 export function renderPostCardHtml(post) {
+  const fmtLower = String(post.format || '').toLowerCase();
   const isVideo =
-    String(post.format || '').toLowerCase().includes('reel') ||
-    String(post.format || '').toLowerCase().includes('video');
+    fmtLower.includes('reel') ||
+    fmtLower.includes('video') ||
+    fmtLower.includes('shorts') ||
+    fmtLower.includes('live');
   const mediaCount = Math.max(1, Math.min(4, Number(post.mediaCount || (isVideo ? 1 : 1))));
   const mediaBoxes = [];
   for (let m = 1; m <= mediaCount; m++) {
     mediaBoxes.push(`
       <div class="sl-media-box">
-        <div class="sl-media-icon-circle">${isVideo ? '▶' : '🖼️'}</div>
-        <span>Media ${m}</span>
+        <div class="sl-media-icon-circle">${isVideo ? '▶' : fmtLower.includes('thread') ? '🧵' : '🖼️'}</div>
+        <span>${escapeHtml(post.format || 'Media')} #${m}</span>
       </div>
     `);
   }
@@ -129,8 +132,8 @@ export function renderPostCardHtml(post) {
     ? `
       <div class="sl-transcript-box">
         <div class="sl-transcript-title">
-          <span>🎙️ Lời thoại Video (SRT):</span>
-          <span style="font-weight:500; color:var(--text-muted)">Subtitles</span>
+          <span>🎙️ Bóc tách Lời thoại Video (SRT / Voiceover):</span>
+          <span style="font-weight:600; color:var(--primary)">Đã đọc chi tiết âm thanh</span>
         </div>
         <div class="sl-transcript-content">${escapeHtml(post.transcript)}</div>
       </div>
@@ -138,38 +141,63 @@ export function renderPostCardHtml(post) {
     : '';
 
   const audit = post.contentAudit || {};
-  const tierIcon =
-    audit.tierClass === 'viral'
-      ? '🔥'
-      : audit.tierClass === 'high'
-        ? '✅'
-        : audit.tierClass === 'low'
-          ? '⚠️'
-          : '⚡';
+  const isWin = Boolean(audit.isWin);
+  const isSuperWin = audit.tierClass === 'viral';
 
   const vsStatsText = [
-    audit.vsAvgViewsPct !== null && audit.vsAvgViewsPct !== undefined
-      ? `${fmtSignedPct(audit.vsAvgViewsPct)} Views vs TB`
-      : null,
-    audit.vsAvgInteractionsPct !== undefined
-      ? `${fmtSignedPct(audit.vsAvgInteractionsPct)} Tương tác vs TB`
-      : null,
+    audit.viewsMultiplier ? `${audit.viewsMultiplier}x Views TB` : null,
+    audit.interactionsMultiplier ? `${audit.interactionsMultiplier}x Tương tác TB` : null,
     audit.er ? `ER: ${audit.er}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
 
+  const winRibbonHtml = isWin
+    ? `
+      <div style="background:${isSuperWin ? 'linear-gradient(90deg, #fef3c7, #dcfce7)' : 'linear-gradient(90deg, #e0e7ff, #f0fdf4)'}; border:1px solid ${isSuperWin ? '#fbbf24' : '#818cf8'}; border-radius:6px; padding:7px 10px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span style="background:${isSuperWin ? '#d97706' : '#4f46e5'}; color:#fff; font-weight:800; font-size:11px; padding:2px 8px; border-radius:999px;">
+            ${escapeHtml(audit.winBadgeLabel || '🔥 CONTENT WIN')}
+          </span>
+          <span style="font-size:11.5px; font-weight:700; color:#1e293b;">
+            🎯 Mục tiêu Win: ${escapeHtml(audit.winGoal || 'Chuyển đổi & Reach')}
+          </span>
+        </div>
+        <span style="font-size:11px; font-weight:700; color:#047857;">
+          📈 ${escapeHtml(vsStatsText)}
+        </span>
+      </div>
+    `
+    : '';
+
+  const winDriversChips =
+    Array.isArray(audit.winDrivers) && audit.winDrivers.length > 0
+      ? `
+        <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:2px;">
+          ${audit.winDrivers
+            .map(
+              (d) =>
+                `<span style="font-size:10.8px; font-weight:600; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; padding:1px 7px; border-radius:4px;">✓ ${escapeHtml(d)}</span>`
+            )
+            .join('')}
+        </div>
+      `
+      : '';
+
   const auditBoxHtml = audit.hookType
     ? `
-      <div class="sl-post-audit-box">
+      <div class="sl-post-audit-box" style="${isWin ? 'border-color:#86efac; background:#f8fafc;' : ''}">
+        ${winRibbonHtml}
         <div class="sl-post-audit-header">
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
             <span class="sl-tier-badge ${escapeHtml(audit.tierClass || 'standard')}">
-              ${tierIcon} Điểm Hiệu Quả: ${audit.score || 65}/100 · ${escapeHtml(audit.tier || 'Ổn định')}
+              Điểm Content: ${audit.score || 65}/100 · ${escapeHtml(audit.tier || 'Ổn định')}
             </span>
-            <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">
-              (${escapeHtml(vsStatsText)})
-            </span>
+            ${
+              !isWin
+                ? `<span style="font-size:11px; color:var(--text-secondary); font-weight:600;">(${escapeHtml(vsStatsText)})</span>`
+                : ''
+            }
           </div>
           <button
             type="button"
@@ -177,11 +205,11 @@ export function renderPostCardHtml(post) {
             data-post-index="${post.index}"
             style="padding:3px 9px; font-size:11.5px; border-color:#a5b4fc; color:var(--primary); background:#ffffff;"
           >
-            🧠 AI Bóc tách sâu Hook &amp; Content
+            🧠 AI Giải phẫu Bài &amp; Kịch bản
           </button>
         </div>
 
-        <!-- Phân tích câu Hook mở đầu -->
+        <!-- Phân tích câu Hook mở đầu & Đọc chi tiết 3 lớp nội dung -->
         <div class="sl-hook-quote">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; gap:6px; flex-wrap:wrap;">
             <strong style="color:var(--primary); font-size:11.5px;">🎯 Kỹ thuật Hook: ${escapeHtml(audit.hookType)}</strong>
@@ -190,55 +218,73 @@ export function renderPostCardHtml(post) {
           <div style="color:var(--text-main); font-style:italic; font-size:12px;">
             "${escapeHtml(audit.videoHookSpoken || audit.hookSentence || '')}"
           </div>
+          ${
+            audit.videoBodySpoken
+              ? `<div style="font-size:11.2px; color:var(--text-secondary); margin-top:3px;">🎙️ <strong>Nội dung thân &amp; kết video:</strong> "${escapeHtml(audit.videoBodySpoken)}"</div>`
+              : ''
+          }
           <div style="font-size:11.2px; color:var(--text-secondary); margin-top:3px;">
-            💡 <strong>Cơ chế thu hút:</strong> ${escapeHtml(audit.hookMechanism || '')}
+            💡 <strong>Đòn bẩy tâm lý:</strong> ${escapeHtml(audit.hookMechanism || '')}
           </div>
         </div>
 
-        <!-- Phong cách Content, Công thức viết, Tuyến bài & Phễu -->
+        <!-- Phân loại Đa chiều: Tuyến bài, Góc tiếp cận, Công thức viết, Phễu & CTA -->
         <div class="sl-audit-tags-grid">
           <div class="sl-audit-tag-item">
-            <span class="sl-audit-tag-label">✍️ Phong cách Content</span>
-            <span class="sl-audit-tag-val">${escapeHtml(audit.contentStyle || '')}</span>
+            <span class="sl-audit-tag-label">📌 Phân loại Tuyến nội dung (Pillar)</span>
+            <span class="sl-audit-tag-val">${escapeHtml(audit.contentPillar || '')}</span>
           </div>
           <div class="sl-audit-tag-item">
-            <span class="sl-audit-tag-label">📐 Công thức kịch bản</span>
+            <span class="sl-audit-tag-label">🧭 Góc tiếp cận (Content Angle)</span>
+            <span class="sl-audit-tag-val">${escapeHtml(audit.contentAngle || audit.contentStyle || '')}</span>
+          </div>
+          <div class="sl-audit-tag-item">
+            <span class="sl-audit-tag-label">📐 Công thức Copywriting</span>
             <span class="sl-audit-tag-val">${escapeHtml(audit.copyFormula || '')}</span>
           </div>
           <div class="sl-audit-tag-item">
-            <span class="sl-audit-tag-label">📌 Tuyến nội dung &amp; Phễu</span>
-            <span class="sl-audit-tag-val">${escapeHtml(audit.contentPillar || '')} · ${escapeHtml((audit.funnelStage || '').split(' ')[0])}</span>
-          </div>
-          <div class="sl-audit-tag-item">
-            <span class="sl-audit-tag-label">📣 Kỹ thuật CTA</span>
-            <span class="sl-audit-tag-val">${escapeHtml(audit.ctaType || '')}</span>
+            <span class="sl-audit-tag-label">📣 Tầng Phễu &amp; Kỹ thuật CTA</span>
+            <span class="sl-audit-tag-val">${escapeHtml((audit.funnelStage || '').split(' ')[0])} · ${escapeHtml(audit.ctaType || '')}</span>
           </div>
         </div>
 
+        ${winDriversChips}
+
         <!-- Từ khóa đắt giá -->
         <div>
-          <span style="font-size:11px; color:var(--text-muted); font-weight:600; margin-right:4px;">🔑 Từ khóa đắt giá:</span>
+          <span style="font-size:11px; color:var(--text-muted); font-weight:600; margin-right:4px;">🔑 Từ khóa &amp; Thực thể bóc tách:</span>
           ${(audit.matchedKeywords || [])
             .map((kw) => `<span class="sl-kw-chip">${escapeHtml(kw)}</span>`)
             .join('')}
         </div>
 
-        <!-- Đánh giá hiệu quả & Đề xuất tối ưu -->
-        <div class="sl-verdict-note">
-          <div><strong>📊 Đánh giá hiệu quả:</strong> ${escapeHtml(audit.verdict || '')}</div>
-          <div style="margin-top:4px; color:var(--primary);"><strong>🚀 Đề xuất tối ưu:</strong> ${escapeHtml(audit.optimizationTip || '')}</div>
+        <!-- Giải mã Lý do WIN hoặc Đề xuất sửa bài -->
+        <div class="sl-verdict-note" style="${isWin ? 'background:#f0fdf4; border-color:#bbf7d0;' : ''}">
+          <div>
+            <strong>${isWin ? '🧬 Giải mã Tại sao Bài WIN:' : '📊 Đánh giá hiệu quả:'}</strong>
+            ${escapeHtml(audit.whyItWon || audit.verdict || '')}
+          </div>
+          <div style="margin-top:4px; color:var(--primary);">
+            <strong>${isWin ? '🚀 Công thức Nhân bản / Scale Ads:' : '🔧 Gợi ý tối ưu &amp; Viết lại Hook:'}</strong>
+            ${escapeHtml(isWin ? audit.optimizationTip || '' : audit.rewrittenHook || audit.optimizationTip || '')}
+          </div>
         </div>
       </div>
     `
     : '';
 
   return `
-    <article class="sl-post-card" id="report-post-card-${post.index}">
+    <article class="sl-post-card" id="report-post-card-${post.index}" style="${isSuperWin ? 'border:1.5px solid #f59e0b;' : isWin ? 'border:1.5px solid #10b981;' : ''}">
       <div class="sl-post-header">
         <div class="sl-post-title">
           <span>Bài ${post.index}</span>
           <span>·</span>
           <span class="sl-format-tag">${escapeHtml(post.format || 'Bài đăng')}</span>
+          ${
+            isWin
+              ? `<span style="font-size:10.5px; font-weight:800; padding:1px 7px; border-radius:999px; background:${isSuperWin ? '#fef3c7' : '#dcfce7'}; color:${isSuperWin ? '#b45309' : '#047857'}; border:1px solid ${isSuperWin ? '#fcd34d' : '#86efac'};">${escapeHtml(audit.winBadgeLabel)}</span>`
+              : ''
+          }
         </div>
         <span class="sl-post-date">${escapeHtml(post.publishedAt || '')}</span>
       </div>
@@ -254,7 +300,7 @@ export function renderPostCardHtml(post) {
 
       <div class="sl-post-metrics">
         <div class="sl-metric-cell">
-          <span class="sl-metric-label">Reaction</span>
+          <span class="sl-metric-label">Reaction / Tim</span>
           <span class="sl-metric-val">${fmtNum(post.reactions || 0)}</span>
         </div>
         <div class="sl-metric-cell">
@@ -262,7 +308,7 @@ export function renderPostCardHtml(post) {
           <span class="sl-metric-val">${fmtNum(post.comments || 0)}</span>
         </div>
         <div class="sl-metric-cell">
-          <span class="sl-metric-label">Chia sẻ</span>
+          <span class="sl-metric-label">Chia sẻ / Lưu</span>
           <span class="sl-metric-val">${fmtNum(post.shares || 0)}</span>
         </div>
         <div class="sl-metric-cell">
@@ -383,25 +429,264 @@ function renderMetricBadges(item) {
 }
 
 /**
- * Render Bảng Ma Trận Phân Tích Chuyên Sâu Bài Viết (Hook, Phong cách Content, Công thức & Đánh giá Hiệu quả)
+ * Render Trung tâm Phân loại Nội dung & Đánh giá Nội dung WIN (Winning Content Lab)
+ * Hỗ trợ đa nền tảng: Facebook, TikTok, Instagram, Threads, YouTube, Shopee Video
+ */
+function renderWinningContentSectionHtml(report) {
+  const { channel = {}, posts = [], winningSummary = {} } = report;
+  const pf = String(channel.platform || 'facebook').toLowerCase();
+  const totalPosts = winningSummary.totalPosts || posts.length || 1;
+  const winPosts = posts.filter((p) => p.contentAudit?.isWin);
+  const superWinCount =
+    winningSummary.superWinCount ??
+    posts.filter((p) => p.contentAudit?.tierClass === 'viral').length;
+  const contentWinCount =
+    winningSummary.contentWinCount ??
+    posts.filter((p) => p.contentAudit?.tierClass === 'high').length;
+  const totalWinCount = winningSummary.totalWinCount ?? winPosts.length;
+  const winRatePct =
+    winningSummary.winRatePct ?? Math.round((totalWinCount / Math.max(1, totalPosts)) * 100);
+
+  const byPillar = winningSummary.byPillar || [];
+  const byHook = winningSummary.byHook || [];
+  const topWinPillar = winningSummary.topWinPillar || byPillar[0] || { name: 'Giải quyết Nỗi đau', winRate: 45 };
+  const topWinHook = winningSummary.topWinHook || byHook[0] || { name: 'Câu hỏi / Phản biện', winRate: 50 };
+  const topWinningPosts =
+    Array.isArray(winningSummary.topWinningPosts) && winningSummary.topWinningPosts.length > 0
+      ? winningSummary.topWinningPosts.slice(0, 6)
+      : [...winPosts]
+          .sort((a, b) => (b.contentAudit?.score || 0) - (a.contentAudit?.score || 0))
+          .slice(0, 6);
+
+  const platformCriteriaText =
+    pf === 'tiktok'
+      ? 'Chuẩn TikTok For You: Views ≥ 1.5x TB kênh + Tỷ lệ giữ chân 3s đầu (Spoken SRT Hook) & Lượt Share/Comment hỏi giỏ hàng vượt chuẩn.'
+      : pf === 'instagram'
+        ? 'Chuẩn Instagram Reels & Carousel: Tỷ lệ Tương tác & Lưu/Chia sẻ (Saves & Shares) ≥ 1.5x TB kênh + Thẩm mỹ Lookbook/OOTD rõ nét.'
+        : pf === 'threads'
+          ? 'Chuẩn Threads Thảo luận: Tỷ lệ Reply & Repost (Chia sẻ quan điểm / Hỏi đáp cộng đồng) ≥ 1.5x TB kênh với câu mở đầu chạm cảm xúc.'
+          : pf === 'shopee'
+            ? 'Chuẩn Shopee Video & Live: Lượt xem ≥ 1.5x TB + Tương tác hỏi mã giảm giá / bấm Giỏ hàng cam cao đột biến.'
+            : pf === 'youtube'
+              ? 'Chuẩn YouTube Shorts & Lookbook: Views ≥ 1.5x TB + Giữ chân khán giả bằng cấu trúc tiêu đề SEO & Hook 3 giây đầu.'
+              : 'Chuẩn Facebook Fanpage: Lượt xem Reel hoặc Tương tác (Reactions + Comment + Share) ≥ 1.5x TB kênh kèm cấu trúc kịch bản & CTA rõ ràng.';
+
+  return `
+    <div class="sl-section-block" id="sec-winning-content" style="border:1.5px solid #a7f3d0; background:linear-gradient(180deg, #f0fdf4 0%, #ffffff 220px);">
+      <div class="sl-section-bar">
+        <div class="sl-section-bar-left">
+          <span class="sl-bar-accent" style="background:#059669;"></span>
+          <h2 class="sl-section-bar-title" style="color:#065f46;">
+            🏆 TRUNG TÂM ĐỌC CHI TIẾT, PHÂN LOẠI &amp; ĐÁNH GIÁ NỘI DUNG WIN (${escapeHtml(pf.toUpperCase())})
+          </h2>
+          <span class="sl-tier-badge viral">${totalWinCount}/${totalPosts} Bài WIN (${winRatePct}%)</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm no-print" id="quickFilterOnlyWinsBtn" style="background:#059669; border-color:#059669;">
+          🔥 Lọc xem riêng ${totalWinCount} Bài WIN dưới danh sách &darr;
+        </button>
+      </div>
+
+      <!-- 4 KPI CARDS TỔNG QUAN NỘI DUNG WIN -->
+      <div class="sl-ideas-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom:18px;">
+        <div class="sl-idea-card" style="background:#ffffff; border-color:#86efac;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#047857; text-transform:uppercase;">Tỷ lệ Nội dung WIN (Win Rate)</div>
+            <div style="font-size:26px; font-weight:800; color:#065f46; margin:4px 0;">${winRatePct}%</div>
+            <div style="font-size:12px; color:var(--text-secondary);">
+              🏆 <strong>${superWinCount}</strong> Super Win · 🔥 <strong>${contentWinCount}</strong> Content Win / ${totalPosts} bài
+            </div>
+          </div>
+        </div>
+
+        <div class="sl-idea-card" style="background:#ffffff;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:var(--primary); text-transform:uppercase;">Tuyến Nội dung (Pillar) WIN #1</div>
+            <div style="font-size:14.5px; font-weight:800; color:var(--text-main); margin:5px 0;">${escapeHtml(topWinPillar.name || '')}</div>
+            <div style="font-size:12px; color:#047857; font-weight:700;">
+              Tỷ lệ Win: ${topWinPillar.winRate || 0}% (${topWinPillar.winCount || 0}/${topWinPillar.count || 0} bài)
+            </div>
+          </div>
+        </div>
+
+        <div class="sl-idea-card" style="background:#ffffff;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#b45309; text-transform:uppercase;">Kỹ thuật Hook 3s WIN Mạnh Nhất</div>
+            <div style="font-size:14.5px; font-weight:800; color:var(--text-main); margin:5px 0;">${escapeHtml(topWinHook.name || '')}</div>
+            <div style="font-size:12px; color:#b45309; font-weight:700;">
+              Tỷ lệ Win: ${topWinHook.winRate || 0}% · TB ${fmtNum(topWinHook.avgViews || 0)} views
+            </div>
+          </div>
+        </div>
+
+        <div class="sl-idea-card" style="background:#ffffff;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#3730a3; text-transform:uppercase;">Hệ quy chiếu Đánh giá WIN</div>
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:4px; line-height:1.45;">
+              ${escapeHtml(platformCriteriaText)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 BẢNG MA TRẬN PHÂN LOẠI NỘI DUNG & TỶ LỆ WIN THEO PILLAR VÀ HOOK -->
+      <div class="sl-summary-two-col" style="margin-bottom:20px;">
+        <div class="sl-quant-card">
+          <div class="sl-quant-card-title">📌 1. Phân loại Tuyến Nội dung (Content Pillars) &amp; Tỷ lệ Bài WIN</div>
+          <div class="sl-table-wrap">
+            <table class="sl-table">
+              <thead>
+                <tr>
+                  <th>Tuyến nội dung (Content Pillar)</th>
+                  <th class="num">Số bài</th>
+                  <th class="num">Số bài WIN</th>
+                  <th class="num">Tỷ lệ WIN</th>
+                  <th class="num">Views TB</th>
+                  <th class="num">Tương tác TB</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${byPillar
+                  .map(
+                    (row) => `
+                  <tr>
+                    <td><strong>${escapeHtml(row.name)}</strong></td>
+                    <td class="num">${fmtNum(row.count)}</td>
+                    <td class="num"><strong style="color:#047857;">${fmtNum(row.winCount)}</strong></td>
+                    <td class="num">
+                      <span class="sl-tier-badge ${row.winRate >= 40 ? 'viral' : row.winRate >= 25 ? 'high' : 'standard'}">
+                        ${row.winRate}%
+                      </span>
+                    </td>
+                    <td class="num">${fmtNum(row.avgViews)}</td>
+                    <td class="num">${fmtNum(row.avgInteractions)}</td>
+                  </tr>
+                `
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sl-quant-card">
+          <div class="sl-quant-card-title">🎯 2. Phân loại Kỹ thuật Hook Mở đầu &amp; Tỷ lệ Bài WIN</div>
+          <div class="sl-table-wrap">
+            <table class="sl-table">
+              <thead>
+                <tr>
+                  <th>Kỹ thuật Hook (3s đầu / Dòng đầu)</th>
+                  <th class="num">Số bài</th>
+                  <th class="num">Số bài WIN</th>
+                  <th class="num">Tỷ lệ WIN</th>
+                  <th class="num">Views TB</th>
+                  <th class="num">Tương tác TB</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${byHook
+                  .map(
+                    (row) => `
+                  <tr>
+                    <td><strong>${escapeHtml(row.name)}</strong></td>
+                    <td class="num">${fmtNum(row.count)}</td>
+                    <td class="num"><strong style="color:#047857;">${fmtNum(row.winCount)}</strong></td>
+                    <td class="num">
+                      <span class="sl-tier-badge ${row.winRate >= 40 ? 'viral' : row.winRate >= 25 ? 'high' : 'standard'}">
+                        ${row.winRate}%
+                      </span>
+                    </td>
+                    <td class="num">${fmtNum(row.avgViews)}</td>
+                    <td class="num">${fmtNum(row.avgInteractions)}</td>
+                  </tr>
+                `
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- GIẢI PHẪU CHI TIẾT TOP BÀI NỘI DUNG WIN TIÊU BIỂU CỦA KÊNH -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+          <h3 style="font-size:14.5px; font-weight:800; color:#065f46; text-transform:uppercase;">
+            🧬 GIẢI PHẪU CHI TIẾT TOP BÀI NỘI DUNG WIN TIÊU BIỂU (ĐỌC HOOK, LỜI THOẠI, CÔNG THỨC &amp; LÝ DO WIN)
+          </h3>
+          <span style="font-size:12px; color:var(--text-secondary);">
+            Bấm vào mã <strong>Bài X</strong> để nhảy tới bài gốc hoặc <strong>🧠 AI Giải phẫu</strong> để lấy 3 mẫu Hook nhân bản
+          </span>
+        </div>
+
+        <div class="sl-feed-grid">
+          ${topWinningPosts
+            .map((p) => {
+              const a = p.contentAudit || {};
+              const isSuper = a.tierClass === 'viral';
+              return `
+                <div class="sl-formula-card" style="border:1.5px solid ${isSuper ? '#fbbf24' : '#6ee7b7'}; background:#ffffff; display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <button type="button" class="ref-chip" data-ref-type="post" data-ref-index="${p.index}">Bài ${p.index}</button>
+                        <span class="sl-format-tag">${escapeHtml(p.format || '')}</span>
+                        <span style="font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; background:${isSuper ? '#fef3c7' : '#dcfce7'}; color:${isSuper ? '#b45309' : '#047857'};">
+                          ${escapeHtml(a.winBadgeLabel || '🔥 CONTENT WIN')} · ${a.score || 82}/100
+                        </span>
+                      </div>
+                      <button type="button" class="btn btn-outline btn-sm deep-post-audit-btn no-print" data-post-index="${p.index}" style="padding:2px 8px; font-size:11px;">
+                        🧠 Nhân bản kịch bản Win
+                      </button>
+                    </div>
+
+                    <div style="font-size:12px; font-weight:700; color:#047857; margin-bottom:6px;">
+                      🎯 Mục tiêu Win: ${escapeHtml(a.winGoal || '')} &nbsp;|&nbsp; 📈 ${a.viewsMultiplier || 1.5}x Views TB · ${a.interactionsMultiplier || 1.5}x Tương tác TB (${fmtNum(p.views || 0)} views · ${fmtNum(p.reactions || 0)} 👍 · ${fmtNum(p.comments || 0)} 💬 · ${fmtNum(p.shares || 0)} ↗️)
+                    </div>
+
+                    <div class="sl-hook-quote" style="margin-bottom:8px;">
+                      <div style="font-size:11px; font-weight:700; color:var(--primary); margin-bottom:2px;">
+                        🎙️ Hook 3s đầu / Dòng mở đầu (${escapeHtml(a.hookType || '')} - ${a.hookScore || 9.0}/10):
+                      </div>
+                      <div style="font-size:12.2px; font-style:italic; color:var(--text-main);">
+                        "${escapeHtml(a.videoHookSpoken || a.hookSentence || '')}"
+                      </div>
+                    </div>
+
+                    <div style="font-size:12px; color:var(--text-secondary); margin-bottom:6px;">
+                      <strong>📌 Phân loại:</strong> ${escapeHtml(a.contentPillar || '')} &nbsp;·&nbsp;
+                      <strong>🧭 Góc tiếp cận:</strong> ${escapeHtml(a.contentAngle || '')} &nbsp;·&nbsp;
+                      <strong>📐 Công thức:</strong> ${escapeHtml(a.copyFormula || '')}
+                    </div>
+
+                    <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:8px 10px; font-size:12px; color:#1e293b;">
+                      <div><strong>🧬 Tại sao bài này WIN:</strong> ${escapeHtml(a.whyItWon || a.verdict || '')}</div>
+                      <div style="margin-top:4px; color:#047857;"><strong>🚀 Hướng nhân bản:</strong> ${escapeHtml(a.optimizationTip || '')}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Render Bảng Ma Trận Phân Tích Chuyên Sâu Bài Viết (Hook, Phong cách Content, Công thức & Đánh giá Nội dung WIN)
  */
 function renderPostContentMasterTable(posts = []) {
   const sorted = [...posts].sort(
     (a, b) => (b.contentAudit?.score || 0) - (a.contentAudit?.score || 0)
   );
-  const topAndNotable = sorted.slice(0, 15);
+  const topAndNotable = sorted.slice(0, 18);
 
   return topAndNotable
     .map((p) => {
       const a = p.contentAudit || {};
-      const vsView =
-        a.vsAvgViewsPct !== null && a.vsAvgViewsPct !== undefined
-          ? `${fmtSignedPct(a.vsAvgViewsPct)} Views`
-          : '';
-      const vsInt =
-        a.vsAvgInteractionsPct !== undefined
-          ? `${fmtSignedPct(a.vsAvgInteractionsPct)} Tương tác`
-          : '';
+      const vsView = a.viewsMultiplier ? `${a.viewsMultiplier}x Views TB` : '';
+      const vsInt = a.interactionsMultiplier ? `${a.interactionsMultiplier}x Tương tác TB` : '';
 
       return `
         <tr>
@@ -418,13 +703,13 @@ function renderPostContentMasterTable(posts = []) {
               "${escapeHtml(a.videoHookSpoken || a.hookSentence || '')}"
             </div>
           </td>
-          <td style="min-width:180px;">
-            <div style="font-weight:700; font-size:12px;">${escapeHtml(a.contentStyle || '')}</div>
+          <td style="min-width:190px;">
+            <div style="font-weight:700; font-size:12px; color:var(--text-main);">${escapeHtml(a.contentPillar || '')}</div>
             <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
-              📐 Công thức: <strong>${escapeHtml(a.copyFormula || '')}</strong>
+              🧭 Góc: <strong>${escapeHtml(a.contentAngle || a.contentStyle || '')}</strong>
             </div>
             <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
-              🎯 Phễu: ${escapeHtml(a.funnelStage || '')}
+              📐 ${escapeHtml(a.copyFormula || '')} · 🎯 ${escapeHtml((a.funnelStage || '').split(' ')[0])}
             </div>
           </td>
           <td class="num" style="white-space:nowrap;">
@@ -432,18 +717,23 @@ function renderPostContentMasterTable(posts = []) {
             <div style="font-size:11.5px; color:var(--text-secondary);">
               ${fmtNum(p.reactions)} 👍 · ${fmtNum(p.comments)} 💬 · ${fmtNum(p.shares)} ↗️
             </div>
-            <div style="font-size:11px; color:var(--primary); font-weight:600;">
+            <div style="font-size:11px; color:#047857; font-weight:700;">
               ${[vsView, vsInt].filter(Boolean).join(' · ')}
             </div>
           </td>
-          <td style="min-width:230px;">
-            <div style="margin-bottom:4px;">
+          <td style="min-width:250px;">
+            <div style="margin-bottom:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <span class="sl-tier-badge ${escapeHtml(a.tierClass || 'standard')}">
-                ${a.score || 65}/100 · ${escapeHtml(a.tier || 'Ổn định')}
+                ${escapeHtml(a.winBadgeLabel || a.tier || 'Ổn định')} (${a.score || 65}/100)
               </span>
+              ${
+                a.isWin
+                  ? `<span style="font-size:10.5px; font-weight:700; color:#047857;">🎯 ${escapeHtml(a.winGoal || '')}</span>`
+                  : ''
+              }
             </div>
             <div style="font-size:11.8px; color:var(--text-secondary);">
-              ${escapeHtml(a.verdict || '')}
+              ${escapeHtml(a.whyItWon || a.verdict || '')}
             </div>
             <button
               type="button"
@@ -451,7 +741,7 @@ function renderPostContentMasterTable(posts = []) {
               data-post-index="${p.index}"
               style="margin-top:5px; padding:2px 8px; font-size:11px;"
             >
-              🧠 Xem bóc tách chi tiết &amp; Gợi ý Hook
+              🧠 Giải phẫu &amp; Nhân bản Hook
             </button>
           </td>
         </tr>
@@ -589,6 +879,7 @@ export function renderSingleReport(container, report, callbacks = {}) {
         <div class="toc-heading">Mục lục Báo cáo</div>
         <ul class="toc-list">
           <li><a href="#sec-header" class="toc-link"><span class="toc-num">★</span> Thông tin Kênh</a></li>
+          <li><a href="#sec-winning-content" class="toc-link"><span class="toc-num">🏆</span> Phân loại &amp; Nội dung WIN</a></li>
           <li><a href="#sec-posts" class="toc-link"><span class="toc-num">P</span> Bài đăng &amp; Hook (${posts.length})</a></li>
           <li><a href="#sec-post-master" class="toc-link"><span class="toc-num">🔬</span> Bóc tách Hook &amp; Content</a></li>
           <li><a href="#sec-ads" class="toc-link"><span class="toc-num">A</span> Quảng cáo (${ads.length})</a></li>
@@ -643,29 +934,41 @@ export function renderSingleReport(container, report, callbacks = {}) {
           </div>
         </div>
 
+        <!-- 1B. TRUNG TÂM PHÂN LOẠI NỘI DUNG & ĐÁNH GIÁ NỘI DUNG WIN (WINNING CONTENT LAB) -->
+        ${renderWinningContentSectionHtml(report)}
+
         <!-- 2. DANH SÁCH BÀI ĐĂNG + PHÂN TÍCH CÂU HOOK & HIỆU QUẢ TỪNG BÀI (| BÀI ĐĂNG) -->
         <div class="sl-section-block" id="sec-posts">
           <div class="sl-section-bar">
             <div class="sl-section-bar-left">
               <span class="sl-bar-accent"></span>
-              <h2 class="sl-section-bar-title">BÀI ĐĂNG &amp; PHÂN TÍCH NỘI DUNG / CÂU HOOK CHI TIẾT</h2>
+              <h2 class="sl-section-bar-title">BÀI ĐĂNG, PHÂN LOẠI &amp; ĐÁNH GIÁ NỘI DUNG WIN CHI TIẾT</h2>
               <span class="sl-count-pill" id="postsFilteredCountPill">${posts.length} bài</span>
             </div>
 
             <div class="sl-filter-controls">
-              <input type="text" id="postSearchInput" placeholder="Tìm caption, lời thoại, câu hook..." />
+              <input type="text" id="postSearchInput" placeholder="Tìm caption, lời thoại SRT, câu hook..." />
               <select id="postFormatFilter">
                 <option value="all">Mọi định dạng</option>
-                <option value="Reel">Reel / Video</option>
-                <option value="Nhiều ảnh">Nhiều ảnh</option>
-                <option value="Ảnh">Ảnh đơn</option>
+                ${Array.from(new Set(posts.map((p) => p.format).filter(Boolean)))
+                  .map((f) => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`)
+                  .join('')}
               </select>
               <select id="postTierFilter">
                 <option value="all">Mọi mức Hiệu quả</option>
-                <option value="viral">🔥 Bùng nổ (Viral Win)</option>
-                <option value="high">✅ Hiệu quả cao</option>
-                <option value="standard">⚡ Ổn định</option>
-                <option value="low">⚠️ Cần tối ưu</option>
+                <option value="all_wins">🏆 Tất cả Bài WIN (Super Win + Content Win)</option>
+                <option value="viral">🏆 SUPER WIN (Top Bùng nổ)</option>
+                <option value="high">🔥 CONTENT WIN (Hiệu quả cao)</option>
+                <option value="standard">⚡ Đạt chuẩn TB</option>
+                <option value="low">⚠️ Dưới chuẩn (Cần tối ưu)</option>
+              </select>
+              <select id="postPillarFilter">
+                <option value="all">Mọi Tuyến nội dung (Pillar)</option>
+                ${Array.from(
+                  new Set(posts.map((p) => p.contentAudit?.contentPillar).filter(Boolean))
+                )
+                  .map((pil) => `<option value="${escapeHtml(pil)}">${escapeHtml(pil)}</option>`)
+                  .join('')}
               </select>
               <select id="postHookFilter">
                 <option value="all">Mọi kỹ thuật Hook</option>
@@ -675,14 +978,15 @@ export function renderSingleReport(container, report, callbacks = {}) {
                 <option value="POV">POV / Tình huống đời thực</option>
                 <option value="Trực diện">Show trực diện siêu phẩm</option>
                 <option value="Chạm cảm xúc">Tâm sự chạm cảm xúc</option>
+                <option value="Bí quyết">Bí quyết / Cẩm nang</option>
               </select>
               <select id="postSortSelect">
                 <option value="index">Thứ tự gốc (Bài 1 &rarr; ${posts.length})</option>
-                <option value="score">Điểm Hiệu quả Content cao nhất</option>
-                <option value="views">Lượt xem cao nhất</option>
-                <option value="reactions">Reactions cao nhất</option>
-                <option value="comments">Bình luận cao nhất</option>
-                <option value="shares">Chia sẻ cao nhất</option>
+                <option value="score">🏆 Điểm Nội dung WIN cao nhất</option>
+                <option value="views">👁️ Lượt xem cao nhất</option>
+                <option value="reactions">👍 Reactions / Tim cao nhất</option>
+                <option value="comments">💬 Bình luận cao nhất</option>
+                <option value="shares">↗️ Chia sẻ / Lưu cao nhất</option>
               </select>
               <button type="button" class="btn btn-outline btn-sm" id="toggleAllPostsBtn">
                 Hiển thị toàn bộ (${posts.length})
@@ -1331,34 +1635,41 @@ export function renderSingleReport(container, report, callbacks = {}) {
   const postSearchInput = container.querySelector('#postSearchInput');
   const postFormatFilter = container.querySelector('#postFormatFilter');
   const postTierFilter = container.querySelector('#postTierFilter');
+  const postPillarFilter = container.querySelector('#postPillarFilter');
   const postHookFilter = container.querySelector('#postHookFilter');
   const postSortSelect = container.querySelector('#postSortSelect');
   const toggleAllPostsBtn = container.querySelector('#toggleAllPostsBtn');
   const postsFilteredCountPill = container.querySelector('#postsFilteredCountPill');
+  const quickFilterOnlyWinsBtn = container.querySelector('#quickFilterOnlyWinsBtn');
 
   function updatePostsGrid() {
-    const q = (postSearchInput.value || '').trim().toLowerCase();
-    const fmt = postFormatFilter.value;
-    const tierVal = postTierFilter.value;
-    const hookVal = postHookFilter.value;
-    const sortBy = postSortSelect.value;
+    const q = (postSearchInput?.value || '').trim().toLowerCase();
+    const fmt = postFormatFilter?.value || 'all';
+    const tierVal = postTierFilter?.value || 'all';
+    const pillarVal = postPillarFilter?.value || 'all';
+    const hookVal = postHookFilter?.value || 'all';
+    const sortBy = postSortSelect?.value || 'index';
 
     let filtered = posts.filter((p) => {
       if (fmt !== 'all') {
-        const pf = (p.format || '').toLowerCase();
-        if (fmt === 'Reel' && !pf.includes('reel') && !pf.includes('video')) return false;
-        if (fmt === 'Nhiều ảnh' && !pf.includes('nhiều ảnh')) return false;
-        if (fmt === 'Ảnh' && pf !== 'ảnh') return false;
+        if ((p.format || '') !== fmt) return false;
       }
       if (tierVal !== 'all') {
-        if ((p.contentAudit?.tierClass || 'standard') !== tierVal) return false;
+        if (tierVal === 'all_wins') {
+          if (!p.contentAudit?.isWin) return false;
+        } else if ((p.contentAudit?.tierClass || 'standard') !== tierVal) {
+          return false;
+        }
+      }
+      if (pillarVal !== 'all') {
+        if ((p.contentAudit?.contentPillar || '') !== pillarVal) return false;
       }
       if (hookVal !== 'all') {
         const ht = (p.contentAudit?.hookType || '').toLowerCase();
         if (!ht.includes(hookVal.toLowerCase())) return false;
       }
       if (q) {
-        const hay = `${p.caption || ''} ${p.transcript || ''} ${p.contentAudit?.hookType || ''} ${p.contentAudit?.contentStyle || ''} bài ${p.index}`.toLowerCase();
+        const hay = `${p.caption || ''} ${p.transcript || ''} ${p.contentAudit?.hookType || ''} ${p.contentAudit?.contentPillar || ''} ${p.contentAudit?.contentAngle || ''} ${p.contentAudit?.contentStyle || ''} bài ${p.index}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -1389,11 +1700,20 @@ export function renderSingleReport(container, report, callbacks = {}) {
   postSearchInput?.addEventListener('input', updatePostsGrid);
   postFormatFilter?.addEventListener('change', updatePostsGrid);
   postTierFilter?.addEventListener('change', updatePostsGrid);
+  postPillarFilter?.addEventListener('change', updatePostsGrid);
   postHookFilter?.addEventListener('change', updatePostsGrid);
   postSortSelect?.addEventListener('change', updatePostsGrid);
   toggleAllPostsBtn?.addEventListener('click', () => {
     showAllPosts = !showAllPosts;
     updatePostsGrid();
+  });
+  quickFilterOnlyWinsBtn?.addEventListener('click', () => {
+    if (postTierFilter) postTierFilter.value = 'all_wins';
+    if (postSortSelect) postSortSelect.value = 'score';
+    showAllPosts = true;
+    updatePostsGrid();
+    const secPosts = container.querySelector('#sec-posts');
+    secPosts?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   // Lọc Quảng cáo

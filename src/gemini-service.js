@@ -774,7 +774,8 @@ export async function analyzePostDeepWithGemini(
   const baseAnalysis = analyzeSinglePostContent(
     post,
     stats.averages || {},
-    channel.followers || 100000
+    channel.followers || 100000,
+    channel.platform || 'facebook'
   );
 
   if (apiKey && apiKey.trim().length > 10) {
@@ -876,4 +877,85 @@ Hãy trả về JSON tiếng Việt chi tiết theo cấu trúc sau:
     },
   };
 }
+
+/**
+ * Dùng Google Gemini AI sinh nội dung bài đăng đặc thù theo từng nền tảng (TikTok, IG, Threads, YouTube, Shopee, FB)
+ * khi người dùng quét 1 kênh mới, giúp đọc chi tiết nội dung, lời thoại SRT và bóc tách các bài Nội dung WIN sát thực tế.
+ */
+export async function enrichSimulatedPostsWithGemini(scrapedData, apiKey = '', model = DEFAULT_MODEL) {
+  if (!apiKey || apiKey.trim().length <= 10 || !scrapedData?.posts?.length) {
+    return scrapedData;
+  }
+
+  const { channel, posts } = scrapedData;
+  const pf = (channel.platform || 'facebook').toLowerCase();
+
+  const platformGuide = {
+    tiktok:
+      'Định dạng TikTok Video / TikTok Photo Mode / TikTok LIVE Teaser. Caption ngắn gọn bắt trend, có hashtag #TikTokShop, lời thoại SRT 3s đầu cực cuốn, CTA bấm giỏ hàng góc trái màn hình hoặc đặt lịch Live.',
+    instagram:
+      'Định dạng IG Reel / IG Carousel (Lookbook). Ngôn từ thẩm mỹ, sang trọng (OOTD, Lookbook, Aesthetic), nhấn mạnh chất liệu & phom dáng, CTA Direct Message (DM) hoặc bấm Link in Bio.',
+    threads:
+      'Định dạng Thread Thảo luận (Text) / Thread Hỏi đáp (Q&A) / Thread Kèm Ảnh. Giọng văn tự nhiên, đời thường, đặt câu hỏi mở hoặc chia sẻ góc nhìn cá nhân kích thích cộng đồng vào Reply tranh luận và Repost.',
+    youtube:
+      'Định dạng YouTube Shorts / YouTube Lookbook Review Dài. Tiêu đề chuẩn SEO, lời thoại SRT review chi tiết từng ưu nhược điểm và phối đồ thực tế.',
+    shopee:
+      'Định dạng Shopee Video Gắn Giỏ Hàng / Shopee Live Highlight. Nhấn mạnh áp voucher giảm 25%-50%, freeship 0đ, test chất vải cận cảnh, CTA bấm giỏ hàng cam.',
+    facebook:
+      'Định dạng Reel / Nhiều ảnh (Carousel). Kết hợp câu chuyện giải quyết nỗi đau khách hàng, trưng bày BST mới và chiến dịch Mega Live / Flash Sale, CTA Comment từ khóa hoặc chấm (.) nhận tư vấn.',
+  };
+
+  try {
+    const prompt = `Bạn là Giám đốc Nội dung Đa kênh (Multi-Platform Content Strategist). Hãy tạo 8 mẫu bài đăng đặc trưng sát thực tế nhất cho kênh sau trên nền tảng ${pf.toUpperCase()} (bao gồm cả các bài Nội dung WIN đạt viral/chuyển đổi cao và các bài tiêu chuẩn):
+
+- Tên kênh: ${channel.name}
+- Đường dẫn: ${channel.url}
+- Nền tảng: ${pf.toUpperCase()}
+- Ngành hàng: ${channel.category}
+- Đặc thù nền tảng: ${platformGuide[pf] || platformGuide.facebook}
+
+Hãy trả về JSON theo cấu trúc:
+{
+  "customTopics": [
+    {
+      "format": "Tên định dạng chuẩn trên nền tảng (VD: TikTok Video, IG Reel, IG Carousel, Thread Thảo luận, Shopee Video...)",
+      "caption": "Nội dung bài viết đầy đủ (3-5 câu, có câu Hook mở đầu sắc bén, thân bài nêu USP/câu chuyện và cuối bài có CTA + Hashtag)",
+      "transcript": "Lời thoại video định dạng SRT chuẩn (1\\n00:00:00,000 --> 00:00:03,200\\nCâu Hook 3s đầu...\\n\\n2\\n00:00:03,200 --> 00:00:07,500\\nNội dung chính...). Để chuỗi rỗng nếu là bài Text thuần trên Threads.",
+      "isWinTopic": true
+    }
+  ]
+}`;
+
+    const res = await callGeminiJSON(prompt, apiKey, model);
+    const customTopics = Array.isArray(res?.customTopics) ? res.customTopics : [];
+    if (customTopics.length >= 3) {
+      const updatedPosts = posts.map((p, idx) => {
+        const topic = customTopics[idx % customTopics.length];
+        const boost = topic.isWinTopic && idx < 10 ? 1.65 : 1.0;
+        return {
+          ...p,
+          format: topic.format || p.format,
+          caption: topic.caption || p.caption,
+          transcript:
+            topic.transcript !== undefined
+              ? topic.transcript || null
+              : p.transcript,
+          views: Math.round((p.views || 8500) * boost),
+          reactions: Math.round((p.reactions || 45) * boost),
+          comments: Math.round((p.comments || 14) * boost),
+          shares: Math.round((p.shares || 4) * boost),
+        };
+      });
+      return {
+        ...scrapedData,
+        posts: updatedPosts,
+      };
+    }
+  } catch (err) {
+    console.warn('⚠️ Bỏ qua bước làm giàu topic bằng Gemini, dùng bộ topic chuyên biệt theo kênh:', err.message);
+  }
+
+  return scrapedData;
+}
+
 
