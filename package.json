@@ -1,0 +1,14 @@
+{
+  "name": "social-lens-pro",
+  "version": "1.0.0",
+  "description": "Phần mềm Phân tích, Báo cáo & So sánh Đa kênh Mạng xã hội (Social Lens Clone)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
