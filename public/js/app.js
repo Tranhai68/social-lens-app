@@ -6,6 +6,7 @@ import {
   renderSingleReport,
   renderPostCardHtml,
   renderAdCardHtml,
+  resolvePostOriginalUrl,
 } from './report-renderer.js';
 import { renderCompareView } from './compare-renderer.js';
 
@@ -316,6 +317,7 @@ async function openDeepPostAuditModal(reportId, postObj) {
     const hookDive = deep.hookDeepDive || {};
     const styleStruct = deep.contentStyleAndStructure || {};
     const effEval = deep.effectivenessEvaluation || {};
+    const origUrl = resolvePostOriginalUrl(postObj, state.activeReportFull?.channel);
 
     bodyEl.innerHTML = `
       <div class="sl-formula-stack">
@@ -332,6 +334,9 @@ async function openDeepPostAuditModal(reportId, postObj) {
                   : ''
               }
               <span class="sl-m-badge">ER: <strong>${escapeHtml(audit.er || '0.35%')}</strong></span>
+              <a href="${escapeHtml(origUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="padding:3px 10px; font-size:11.5px; color:var(--primary); border-color:#c7d2fe; background:#ffffff; text-decoration:none; font-weight:700;">
+                🔗 Mở xem bài viết gốc &nearr;
+              </a>
             </div>
             <div style="font-size:12.5px; color:var(--text-secondary);">
               👁️ <strong>${fmtNum(postObj.views || 0)}</strong> views (${audit.viewsMultiplier || 1.0}x TB) · 👍 <strong>${fmtNum(postObj.reactions || 0)}</strong> · 💬 <strong>${fmtNum(postObj.comments || 0)}</strong> · ↗️ <strong>${fmtNum(postObj.shares || 0)}</strong>
@@ -665,12 +670,13 @@ function openPreviewRefModal(type, itemObj, onScrollToCard) {
 
   pendingScrollCallback = onScrollToCard;
 
+  const ch = state.activeReportFull?.channel || {};
   if (type === 'post') {
     titleEl.textContent = `Chi tiết Bài đăng #${itemObj.index} (${itemObj.format || ''})`;
-    bodyEl.innerHTML = renderPostCardHtml(itemObj);
+    bodyEl.innerHTML = renderPostCardHtml(itemObj, ch);
   } else {
     titleEl.textContent = `Chi tiết Quảng cáo #${itemObj.index} (ID: ${itemObj.adId || ''})`;
-    bodyEl.innerHTML = renderAdCardHtml(itemObj);
+    bodyEl.innerHTML = renderAdCardHtml(itemObj, ch);
   }
 
   modal.classList.add('open');

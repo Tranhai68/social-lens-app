@@ -25,6 +25,8 @@ import {
 import {
   getSeedReports,
   generateSmartSimulatedChannel,
+  buildValidPostUrl,
+  buildValidAdUrl,
 } from './data/seed-reports.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -166,15 +168,21 @@ function enrichReportPostsWithContentAudit(report) {
   const platform = report.channel?.platform || 'facebook';
   const enrichedPosts = report.posts.map((p) => ({
     ...p,
+    url: buildValidPostUrl(p, report.channel),
     contentAudit:
       p.contentAudit?.winGoal
         ? p.contentAudit
         : analyzeSinglePostContent(p, averages, followers, platform),
   }));
+  const enrichedAds = (report.ads || []).map((a) => ({
+    ...a,
+    url: buildValidAdUrl(a, report.channel),
+  }));
   const winningSummary = summarizeWinningContent(enrichedPosts, averages, followers, platform);
   return {
     ...report,
     posts: enrichedPosts,
+    ads: enrichedAds,
     winningSummary,
   };
 }
@@ -193,12 +201,13 @@ function summarizeReportForList(r) {
     adsCount: r.ads?.length || 0,
     stats: r.stats,
     winningSummary: {
-      totalWinPosts: winSummary.totalWinPosts,
+      totalPosts: winSummary.totalPosts,
+      totalWinCount: winSummary.totalWinCount,
       superWinCount: winSummary.superWinCount,
-      highWinCount: winSummary.highWinCount,
+      contentWinCount: winSummary.contentWinCount,
       winRatePct: winSummary.winRatePct,
-      bestPillarName: winSummary.bestPillar?.name || '',
-      bestHookName: winSummary.bestHook?.name || '',
+      topWinPillar: winSummary.topWinPillar,
+      topWinHook: winSummary.topWinHook,
     },
     funnelSummary: {
       tofu: r.aiAnalysis?.marketingFunnel?.tofu?.count || 0,

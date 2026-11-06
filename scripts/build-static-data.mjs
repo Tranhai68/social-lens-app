@@ -3,7 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeSinglePostContent, summarizeWinningContent } from '../src/stats-calculator.js';
 import { compareChannelsWithGemini } from '../src/gemini-service.js';
-import { getSeedReports } from '../data/seed-reports.js';
+import {
+  getSeedReports,
+  buildValidPostUrl,
+  buildValidAdUrl,
+} from '../data/seed-reports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,17 +87,23 @@ async function main() {
       const baseAudit = analyzeSinglePostContent(p, averages, followers, platform);
       return {
         ...p,
+        url: buildValidPostUrl(p, r.channel),
         contentAudit: p.contentAudit?.deepAudit
           ? { ...baseAudit, deepAudit: p.contentAudit.deepAudit }
           : buildPostDeepAuditFallback(baseAudit, r.channel),
       };
     });
+    const enrichedAds = (r.ads || []).map((a) => ({
+      ...a,
+      url: buildValidAdUrl(a, r.channel),
+    }));
 
     const winningSummary = summarizeWinningContent(enrichedPosts, averages, followers, platform);
     mergedReports.push({
       ...r,
       stats: statsObj,
       posts: enrichedPosts,
+      ads: enrichedAds,
       winningSummary,
     });
   }
@@ -107,13 +117,19 @@ async function main() {
         const baseAudit = analyzeSinglePostContent(p, averages, followers, platform);
         return {
           ...p,
+          url: buildValidPostUrl(p, sr.channel),
           contentAudit: buildPostDeepAuditFallback(baseAudit, sr.channel),
         };
       });
+      const enrichedAds = (sr.ads || []).map((a) => ({
+        ...a,
+        url: buildValidAdUrl(a, sr.channel),
+      }));
       const winningSummary = summarizeWinningContent(enrichedPosts, averages, followers, platform);
       mergedReports.push({
         ...sr,
         posts: enrichedPosts,
+        ads: enrichedAds,
         winningSummary,
       });
       seenIds.add(sr.id);

@@ -494,9 +494,13 @@ function buildLammePosts() {
   const weekdays = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
   for (let i = 1; i <= 126; i++) {
     if (highlightPosts[i]) {
+      const hFmt = String(highlightPosts[i].format || '').toLowerCase();
+      const hIsReel = hFmt.includes('reel') || hFmt.includes('video');
       posts.push({
         id: `lamme_post_${i}`,
-        url: `https://www.facebook.com/lamme.official/posts/${100000 + i}`,
+        url: hIsReel
+          ? `https://www.facebook.com/lamme.official/reels/?post_ref=${i}`
+          : `https://www.facebook.com/lamme.official?post_ref=${i}`,
         ...highlightPosts[i],
       });
       continue;
@@ -517,7 +521,9 @@ function buildLammePosts() {
       format: isReel ? 'Reel' : i % 3 === 0 ? 'Nhiều ảnh' : 'Ảnh',
       publishedAt: `${wd}, ${dayStr}/10/2026 lúc ${hourStr}:${minStr}:15`,
       isoDate,
-      url: `https://www.facebook.com/lamme.official/posts/${100000 + i}`,
+      url: isReel
+        ? `https://www.facebook.com/lamme.official/reels/?post_ref=${i}`
+        : `https://www.facebook.com/lamme.official?post_ref=${i}`,
       views: isReel ? 4800 + ((i * 613) % 14000) : 0,
       reactions: 12 + ((i * 7) % 34),
       comments: 3 + ((i * 5) % 19),
@@ -580,12 +586,14 @@ function buildLammeAds() {
     const isImage = i % 5 === 4; // 22% Ảnh, 78% Video khớp 100% biểu đồ
     const day = Math.max(1, 31 - Math.floor((i / 50) * 29));
     const dayStr = String(day).padStart(2, '0');
+    const adIdVal = i <= 5 ? base.adId : String(700791733071950 + i * 1849321);
     ads.push({
       index: i,
       status: 'Đang chạy',
       format: isImage ? 'MULTI_IMAGES' : 'VIDEO',
       publishedLabel: i <= 5 ? base.publishedLabel : `Thứ ${(i % 6) + 2}, ${dayStr}/10/2026`,
-      adId: i <= 5 ? base.adId : String(700791733071950 + i * 1849321),
+      adId: adIdVal,
+      url: `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=VN&q=lamme.official`,
       cta: 'Send message',
       caption: base.caption,
       transcript: isImage ? null : base.transcript,
@@ -1168,6 +1176,57 @@ function generateAdsForChannel(
   return ads;
 }
 
+export function buildValidPostUrl(post, channel = {}) {
+  const rawUrl = String(post?.url || '').trim();
+  const baseChannelUrl = String(channel?.url || 'https://www.facebook.com/lamme.official')
+    .trim()
+    .replace(/\/+$/, '');
+  const platform = String(channel?.platform || 'facebook').toLowerCase();
+  const idx = post?.index || 1;
+  const fmt = String(post?.format || '').toLowerCase();
+  const isVideo = fmt.includes('reel') || fmt.includes('video') || fmt.includes('short');
+
+  if (
+    rawUrl &&
+    rawUrl.startsWith('http') &&
+    !rawUrl.includes('/posts/100') &&
+    !rawUrl.includes('#post-')
+  ) {
+    return rawUrl;
+  }
+
+  if (platform === 'facebook') {
+    return isVideo
+      ? `${baseChannelUrl}/reels/?post_ref=${idx}`
+      : `${baseChannelUrl}?post_ref=${idx}`;
+  }
+  if (platform === 'instagram') {
+    return isVideo
+      ? `${baseChannelUrl}/reels/?post_ref=${idx}`
+      : `${baseChannelUrl}/?post_ref=${idx}`;
+  }
+  if (platform === 'youtube') {
+    return fmt.includes('short')
+      ? `${baseChannelUrl}/shorts?post_ref=${idx}`
+      : `${baseChannelUrl}/videos?post_ref=${idx}`;
+  }
+  return `${baseChannelUrl}?post_ref=${idx}`;
+}
+
+export function buildValidAdUrl(ad, channel = {}) {
+  if (ad?.url && String(ad.url).startsWith('http')) return ad.url;
+  const baseChannelUrl = String(channel?.url || 'https://www.facebook.com/lamme.official')
+    .trim()
+    .replace(/\/+$/, '');
+  const platform = String(channel?.platform || 'facebook').toLowerCase();
+  const handle =
+    baseChannelUrl.split('/').filter(Boolean).pop()?.replace(/^@/, '') || channel?.name || '';
+  if (platform === 'facebook' || platform === 'instagram') {
+    return `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=VN&q=${encodeURIComponent(handle)}`;
+  }
+  return `${baseChannelUrl}?ad_ref=${ad?.index || 1}`;
+}
+
 function buildMultiPlatformSeedReport({
   id,
   name,
@@ -1196,17 +1255,29 @@ function buildMultiPlatformSeedReport({
   const stats = calculateQuantitativeStats(posts, ads, { from: dateFrom, to: dateTo });
   const enrichedPosts = posts.map((p) => ({
     ...p,
+    url: buildValidPostUrl(p, channel),
     contentAudit: analyzeSinglePostContent(p, stats.averages, followers, platform),
   }));
+  const enrichedAds = (ads || []).map((a) => ({
+    ...a,
+    url: buildValidAdUrl(a, channel),
+  }));
   const winningSummary = summarizeWinningContent(enrichedPosts, stats.averages, followers, platform);
-  const classified = classifyPostsAndAdsDeterministically(enrichedPosts, ads, followers);
-  const aiAnalysis = buildFull13SectionsObject(channel, enrichedPosts, ads, stats, classified, null);
+  const classified = classifyPostsAndAdsDeterministically(enrichedPosts, enrichedAds, followers);
+  const aiAnalysis = buildFull13SectionsObject(
+    channel,
+    enrichedPosts,
+    enrichedAds,
+    stats,
+    classified,
+    null
+  );
 
   return {
     id,
     channel,
     posts: enrichedPosts,
-    ads,
+    ads: enrichedAds,
     stats,
     winningSummary,
     aiAnalysis,
@@ -1435,21 +1506,23 @@ export function generateSmartSimulatedChannel({
     dateTo
   );
 
+  const channelObj = {
+    name: handle,
+    platform,
+    url,
+    followers,
+    category: finalCategory,
+    rating: platform === 'shopee' || platform === 'tiktok' ? '4.9/5.0' : '4.8/5.0',
+    dateFrom,
+    dateTo,
+    createdAt: new Date().toLocaleDateString('vi-VN'),
+  };
+
   return {
     sourceUsed: 'smart-ai-simulation',
-    channel: {
-      name: handle,
-      platform,
-      url,
-      followers,
-      category: finalCategory,
-      rating: platform === 'shopee' || platform === 'tiktok' ? '4.9/5.0' : '4.8/5.0',
-      dateFrom,
-      dateTo,
-      createdAt: new Date().toLocaleDateString('vi-VN'),
-    },
-    posts,
-    ads,
+    channel: channelObj,
+    posts: posts.map((p) => ({ ...p, url: buildValidPostUrl(p, channelObj) })),
+    ads: ads.map((a) => ({ ...a, url: buildValidAdUrl(a, channelObj) })),
   };
 }
 

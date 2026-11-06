@@ -107,10 +107,62 @@ function renderSvgDonutChart(segments = []) {
   `;
 }
 
+export function resolvePostOriginalUrl(post, channel = {}) {
+  const rawUrl = String(post?.url || '').trim();
+  const baseChannelUrl = String(channel?.url || 'https://www.facebook.com/lamme.official')
+    .trim()
+    .replace(/\/+$/, '');
+  const platform = String(channel?.platform || 'facebook').toLowerCase();
+  const idx = post?.index || 1;
+  const fmt = String(post?.format || '').toLowerCase();
+  const isVideo = fmt.includes('reel') || fmt.includes('video') || fmt.includes('short');
+
+  if (
+    rawUrl &&
+    rawUrl.startsWith('http') &&
+    !rawUrl.includes('/posts/100') &&
+    !rawUrl.includes('#post-')
+  ) {
+    return rawUrl;
+  }
+
+  if (platform === 'facebook') {
+    return isVideo
+      ? `${baseChannelUrl}/reels/?post_ref=${idx}`
+      : `${baseChannelUrl}?post_ref=${idx}`;
+  }
+  if (platform === 'instagram') {
+    return isVideo
+      ? `${baseChannelUrl}/reels/?post_ref=${idx}`
+      : `${baseChannelUrl}/?post_ref=${idx}`;
+  }
+  if (platform === 'youtube') {
+    return fmt.includes('short')
+      ? `${baseChannelUrl}/shorts?post_ref=${idx}`
+      : `${baseChannelUrl}/videos?post_ref=${idx}`;
+  }
+  return `${baseChannelUrl}?post_ref=${idx}`;
+}
+
+export function resolveAdOriginalUrl(ad, channel = {}) {
+  if (ad?.url && String(ad.url).startsWith('http')) return ad.url;
+  const baseChannelUrl = String(channel?.url || 'https://www.facebook.com/lamme.official')
+    .trim()
+    .replace(/\/+$/, '');
+  const platform = String(channel?.platform || 'facebook').toLowerCase();
+  const handle =
+    baseChannelUrl.split('/').filter(Boolean).pop()?.replace(/^@/, '') || channel?.name || '';
+  if (platform === 'facebook' || platform === 'instagram') {
+    return `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=VN&q=${encodeURIComponent(handle)}`;
+  }
+  return `${baseChannelUrl}?ad_ref=${ad?.index || 1}`;
+}
+
 /**
  * Render 1 thẻ Bài đăng (Post Card) kèm Khung Phân Tích Chuyên Sâu Nội Dung, Câu Hook & Đánh giá Nội dung WIN
  */
-export function renderPostCardHtml(post) {
+export function renderPostCardHtml(post, channel = {}) {
+  const postUrl = resolvePostOriginalUrl(post, channel);
   const fmtLower = String(post.format || '').toLowerCase();
   const isVideo =
     fmtLower.includes('reel') ||
@@ -276,7 +328,7 @@ export function renderPostCardHtml(post) {
   return `
     <article class="sl-post-card" id="report-post-card-${post.index}" style="${isSuperWin ? 'border:1.5px solid #f59e0b;' : isWin ? 'border:1.5px solid #10b981;' : ''}">
       <div class="sl-post-header">
-        <div class="sl-post-title">
+        <div class="sl-post-title" style="flex-wrap:wrap;">
           <span>Bài ${post.index}</span>
           <span>·</span>
           <span class="sl-format-tag">${escapeHtml(post.format || 'Bài đăng')}</span>
@@ -286,10 +338,28 @@ export function renderPostCardHtml(post) {
               : ''
           }
         </div>
-        <span class="sl-post-date">${escapeHtml(post.publishedAt || '')}</span>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="sl-post-date">${escapeHtml(post.publishedAt || '')}</span>
+          <a
+            href="${escapeHtml(postUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-outline btn-sm no-print"
+            style="padding:2px 8px; font-size:11.2px; color:var(--primary); border-color:#c7d2fe; background:#eef2ff; text-decoration:none; font-weight:700;"
+            title="Mở xem trực tiếp bài viết gốc trên kênh"
+          >
+            🔗 Xem bài gốc &nearr;
+          </a>
+        </div>
       </div>
 
       <div class="sl-post-body">
+        <div style="font-size:11.5px; color:var(--text-secondary); background:#f8fafc; border:1px dashed var(--border-color); border-radius:5px; padding:5px 9px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:75%;">
+            🌐 <strong>Link bài gốc:</strong> <a href="${escapeHtml(postUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--primary); text-decoration:underline;">${escapeHtml(postUrl)}</a>
+          </span>
+          <a href="${escapeHtml(postUrl)}" target="_blank" rel="noopener noreferrer" style="font-weight:700; color:var(--primary); text-decoration:none; white-space:nowrap;">Mở tab mới &nearr;</a>
+        </div>
         <div class="sl-post-caption">${escapeHtml(post.caption || '')}</div>
         ${transcriptHtml}
         ${auditBoxHtml}
@@ -323,7 +393,8 @@ export function renderPostCardHtml(post) {
 /**
  * Render 1 thẻ Quảng cáo (Ad Card)
  */
-export function renderAdCardHtml(ad) {
+export function renderAdCardHtml(ad, channel = {}) {
+  const adUrl = resolveAdOriginalUrl(ad, channel);
   const isVideo = String(ad.format || '').toUpperCase().includes('VIDEO');
   const mediaCount = isVideo ? 1 : Math.min(4, Number(ad.mediaCount || 4));
   const mediaBoxes = [];
@@ -351,12 +422,24 @@ export function renderAdCardHtml(ad) {
   return `
     <article class="sl-post-card" id="report-ad-card-${ad.index}">
       <div class="sl-post-header">
-        <div class="sl-post-title">
+        <div class="sl-post-title" style="flex-wrap:wrap;">
           <span>Quảng cáo ${ad.index}</span>
           <span class="sl-ad-status-tag">${escapeHtml(ad.status || 'Đang chạy')}</span>
           <span style="font-size:11.5px; color:var(--text-muted); font-weight:500;">${escapeHtml(ad.publishedLabel || '')}</span>
         </div>
-        <span class="sl-post-date">ID: ${escapeHtml(ad.adId || '')}</span>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="sl-post-date">ID: ${escapeHtml(ad.adId || '')}</span>
+          <a
+            href="${escapeHtml(adUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-outline btn-sm no-print"
+            style="padding:2px 8px; font-size:11px; color:var(--primary); border-color:#c7d2fe; background:#eef2ff; text-decoration:none; font-weight:700;"
+            title="Xem mẫu quảng cáo trên Thư viện Quảng cáo"
+          >
+            🔗 Xem QC gốc &nearr;
+          </a>
+        </div>
       </div>
 
       <div class="sl-post-body">
@@ -623,6 +706,7 @@ function renderWinningContentSectionHtml(report) {
             .map((p) => {
               const a = p.contentAudit || {};
               const isSuper = a.tierClass === 'viral';
+              const pUrl = resolvePostOriginalUrl(p, channel);
               return `
                 <div class="sl-formula-card" style="border:1.5px solid ${isSuper ? '#fbbf24' : '#6ee7b7'}; background:#ffffff; display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
                   <div>
@@ -634,9 +718,21 @@ function renderWinningContentSectionHtml(report) {
                           ${escapeHtml(a.winBadgeLabel || '🔥 CONTENT WIN')} · ${a.score || 82}/100
                         </span>
                       </div>
-                      <button type="button" class="btn btn-outline btn-sm deep-post-audit-btn no-print" data-post-index="${p.index}" style="padding:2px 8px; font-size:11px;">
-                        🧠 Nhân bản kịch bản Win
-                      </button>
+                      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <a
+                          href="${escapeHtml(pUrl)}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="btn btn-outline btn-sm no-print"
+                          style="padding:2px 8px; font-size:11px; color:var(--primary); border-color:#c7d2fe; background:#eef2ff; text-decoration:none; font-weight:700;"
+                          title="Mở xem trực tiếp bài viết gốc"
+                        >
+                          🔗 Xem bài gốc &nearr;
+                        </a>
+                        <button type="button" class="btn btn-outline btn-sm deep-post-audit-btn no-print" data-post-index="${p.index}" style="padding:2px 8px; font-size:11px;">
+                          🧠 Nhân bản kịch bản Win
+                        </button>
+                      </div>
                     </div>
 
                     <div style="font-size:12px; font-weight:700; color:#047857; margin-bottom:6px;">
@@ -676,7 +772,7 @@ function renderWinningContentSectionHtml(report) {
 /**
  * Render Bảng Ma Trận Phân Tích Chuyên Sâu Bài Viết (Hook, Phong cách Content, Công thức & Đánh giá Nội dung WIN)
  */
-function renderPostContentMasterTable(posts = []) {
+function renderPostContentMasterTable(posts = [], channel = {}) {
   const sorted = [...posts].sort(
     (a, b) => (b.contentAudit?.score || 0) - (a.contentAudit?.score || 0)
   );
@@ -685,13 +781,17 @@ function renderPostContentMasterTable(posts = []) {
   return topAndNotable
     .map((p) => {
       const a = p.contentAudit || {};
+      const pUrl = resolvePostOriginalUrl(p, channel);
       const vsView = a.viewsMultiplier ? `${a.viewsMultiplier}x Views TB` : '';
       const vsInt = a.interactionsMultiplier ? `${a.interactionsMultiplier}x Tương tác TB` : '';
 
       return `
         <tr>
           <td style="white-space:nowrap;">
-            <button type="button" class="ref-chip" data-ref-type="post" data-ref-index="${p.index}">Bài ${p.index}</button>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <button type="button" class="ref-chip" data-ref-type="post" data-ref-index="${p.index}">Bài ${p.index}</button>
+              <a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:11px; font-weight:700; color:var(--primary); text-decoration:none;" title="Mở xem bài viết gốc">🔗 Gốc &nearr;</a>
+            </div>
             <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">${escapeHtml(p.format)}</div>
             <div style="font-size:10.5px; color:var(--text-muted);">${escapeHtml((p.publishedAt || '').split(' lúc ')[0])}</div>
           </td>
@@ -1017,7 +1117,7 @@ export function renderSingleReport(container, report, callbacks = {}) {
                 </tr>
               </thead>
               <tbody>
-                ${renderPostContentMasterTable(posts)}
+                ${renderPostContentMasterTable(posts, channel)}
               </tbody>
             </table>
           </div>
@@ -1691,7 +1791,7 @@ export function renderSingleReport(container, report, callbacks = {}) {
 
     postsFilteredCountPill.textContent = `${filtered.length} bài`;
     const visible = showAllPosts ? filtered : filtered.slice(0, 10);
-    postsFeedGrid.innerHTML = visible.map(renderPostCardHtml).join('');
+    postsFeedGrid.innerHTML = visible.map((p) => renderPostCardHtml(p, channel)).join('');
     toggleAllPostsBtn.textContent = showAllPosts
       ? 'Thu gọn (10 bài đầu)'
       : `Hiển thị toàn bộ (${filtered.length})`;
@@ -1742,7 +1842,7 @@ export function renderSingleReport(container, report, callbacks = {}) {
 
     adsFilteredCountPill.textContent = `${filtered.length} mẫu`;
     const visible = showAllAds ? filtered : filtered.slice(0, 10);
-    adsFeedGrid.innerHTML = visible.map(renderAdCardHtml).join('');
+    adsFeedGrid.innerHTML = visible.map((a) => renderAdCardHtml(a, channel)).join('');
     toggleAllAdsBtn.textContent = showAllAds
       ? 'Thu gọn (10 mẫu đầu)'
       : `Hiển thị toàn bộ (${filtered.length})`;
