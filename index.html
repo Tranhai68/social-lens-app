@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Lens — Hệ Thống Phân Tích, Báo Cáo & So Sánh Đa Kênh AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- TOP NAVIGATION BAR -->
+  <header class="top-navbar">
+    <a href="#" class="brand-logo" id="navLogoBtn">
+      <div class="brand-icon">SL</div>
+      <div>
+        <span class="brand-title">Social Lens</span>
+        <span class="brand-badge">AI Multi-Channel Audit</span>
+      </div>
+    </a>
+
+    <nav class="nav-tabs">
+      <button class="nav-tab-btn active" data-view="hub" id="tabHubBtn">
+        <span>📊</span> Thư viện Báo cáo (<span id="navReportsCount">0</span>)
+      </button>
+      <button class="nav-tab-btn" data-view="report" id="tabReportBtn">
+        <span>📄</span> Chi tiết Báo cáo
+      </button>
+      <button class="nav-tab-btn" data-view="compare" id="tabCompareBtn">
+        <span>⚖️</span> So sánh Đa kênh (<span id="navCompareCount">2</span>)
+      </button>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="btn btn-outline" id="openImportModalBtn" title="Import dữ liệu CSV / JSON">
+        <span>📥</span> Import CSV/JSON
+      </button>
+      <button class="btn btn-outline" id="openSettingsModalBtn" title="Cấu hình Gemini API, Apify & RapidAPI">
+        <span class="api-status-dot" id="apiStatusDot"></span>
+        <span>⚙️ Cấu hình API</span>
+      </button>
+      <button class="btn btn-primary" id="openScanModalBtn">
+        <span>＋</span> Quét Kênh Mới
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="main-container">
+    <!-- VIEW 1: THƯ VIỆN BÁO CÁO (REPORTS HUB - GIỐNG SOCIALLENS.CO.IN/REPORTS) -->
+    <section class="view-section active" id="view-hub">
+      <div class="hub-hero">
+        <div class="hub-hero-text">
+          <h1>Thư viện Báo cáo Phân tích Kênh & Đối thủ (Social Lens Reports)</h1>
+          <p>
+            Quét tự động Bài đăng, Thư viện Quảng cáo (Ad Library), Lời thoại Video (Transcript SRT) &amp;
+            Phân tích chiến lược 13 chuyên mục chuyên sâu bằng Google Gemini AI trên tất cả các nền tảng.
+          </p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-outline" id="quickCompareTopBtn">
+            ⚖️ So sánh các kênh đã chọn
+          </button>
+          <button class="btn btn-primary" id="heroScanBtn">
+            🔍 Phân tích Kênh Mới ngay
+          </button>
+        </div>
+      </div>
+
+      <!-- Platform Filters & Search -->
+      <div class="hub-toolbar">
+        <div class="platform-pills" id="hubPlatformPills">
+          <button class="platform-pill active" data-platform="all">🌐 Tất cả kênh</button>
+          <button class="platform-pill" data-platform="facebook">📘 Facebook Fanpage</button>
+          <button class="platform-pill" data-platform="tiktok">🎵 TikTok</button>
+          <button class="platform-pill" data-platform="instagram">📸 Instagram</button>
+          <button class="platform-pill" data-platform="youtube">▶️ YouTube</button>
+          <button class="platform-pill" data-platform="shopee">🛒 Shopee Video</button>
+          <button class="platform-pill" data-platform="threads">🧵 Threads</button>
+        </div>
+
+        <div class="search-box">
+          <input
+            type="text"
+            id="hubSearchInput"
+            placeholder="Tìm theo tên kênh, ngành hàng (VD: L'AMME, MOMMY)..."
+          />
+        </div>
+      </div>
+
+      <!-- Floating bar when reports are selected for comparison -->
+      <div class="compare-floating-bar" id="compareFloatingBar" style="display:none;">
+        <div>
+          <strong>Đang chọn <span id="floatingCompareCount">0</span> kênh để so sánh đối xứng:</strong>
+          <span id="floatingCompareNames" style="margin-left:8px; color:#c7d2fe; font-size:13px;"></span>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm btn-outline" id="clearCompareSelectionBtn" style="background:transparent; color:#fff; border-color:#6366f1;">
+            Bỏ chọn
+          </button>
+          <button class="btn btn-sm btn-primary" id="goCompareNowBtn" style="background:#10b981;">
+            ⚡ Mở Bảng So Sánh Đa Kênh &rarr;
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid of Report Cards -->
+      <div class="reports-grid" id="hubReportsGrid"></div>
+    </section>
+
+    <!-- VIEW 2: CHI TIẾT BÁO CÁO ĐƠN KÊNH (SINGLE REPORT VIEWER - CHUẨN 100% PDF L'AMME) -->
+    <section class="view-section" id="view-report">
+      <div id="singleReportContainer"></div>
+    </section>
+
+    <!-- VIEW 3: SO SÁNH ĐA KÊNH (MULTI-CHANNEL COMPARISON) -->
+    <section class="view-section" id="view-compare">
+      <div id="compareViewContainer"></div>
+    </section>
+  </main>
+
+  <!-- MODAL 1: QUÉT KÊNH MỚI (APIFY / RAPIDAPI + GEMINI AI) -->
+  <div class="modal-backdrop" id="scanModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>🔍 Quét &amp; Tạo Báo Cáo Phân Tích Kênh Mới</h3>
+        <button class="modal-close-btn" data-close="scanModal">&times;</button>
+      </div>
+      <form id="scanChannelForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Đường dẫn (URL) Kênh mạng xã hội *</label>
+            <input
+              type="text"
+              id="scanUrlInput"
+              placeholder="VD: https://www.facebook.com/lamme.official hoặc https://www.tiktok.com/@brand"
+              required
+            />
+            <small style="color:var(--text-muted); font-size:11.5px;">
+              Hệ thống tự động nhận diện nền tảng, quét bài đăng, quảng cáo Ad Library, bóc tách lời thoại video (SRT) và chạy 13 mục phân tích Gemini AI.
+            </small>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>Nền tảng (Tự động hoặc chọn)</label>
+              <select id="scanPlatformSelect">
+                <option value="">✨ Tự động nhận diện từ URL</option>
+                <option value="facebook">📘 Facebook Fanpage &amp; Ad Library</option>
+                <option value="tiktok">🎵 TikTok Channel &amp; Shop</option>
+                <option value="instagram">📸 Instagram Profile &amp; Reels</option>
+                <option value="youtube">▶️ YouTube Channel &amp; Shorts</option>
+                <option value="shopee">🛒 Shopee Video &amp; Mall</option>
+                <option value="threads">🧵 Threads Profile</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Tên Thương hiệu / Kênh (Tùy chọn)</label>
+              <input type="text" id="scanNameInput" placeholder="VD: L'AMME, SIXDO,ROUTINE..." />
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>Danh mục ngành hàng</label>
+              <input type="text" id="scanCategoryInput" value="Fashion Designer" placeholder="VD: Fashion Designer, Cosmetics..." />
+            </div>
+            <div class="form-group">
+              <label>Số lượng bài quét tối đa</label>
+              <input type="number" id="scanLimitInput" value="50" min="10" max="200" />
+            </div>
+          </div>
+
+          <!-- BỘ CHỌN KỲ RESEARCH THEO THÁNG & THEO NGÀY CHI TIẾT -->
+          <div style="background:var(--bg-page); border:1px solid var(--border-color); border-radius:10px; padding:14px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+              <label style="font-size:13px; font-weight:800; color:var(--primary);">
+                📅 Chọn Thời Gian Research &amp; Phân Tích (Theo Tháng / Theo Ngày Chi Tiết)
+              </label>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:12px; color:var(--text-secondary);">Năm:</span>
+                <select id="scanYearSelect" style="padding:4px 8px; font-size:12px; font-weight:700;">
+                  <option value="2025">2025</option>
+                  <option value="2026" selected>2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Chọn nhanh Mốc Thời Gian / Quý -->
+            <div class="preset-chips-row" id="scanQuickPresets">
+              <button type="button" class="preset-chip-btn" data-preset="7d">⚡ 7 ngày gần nhất</button>
+              <button type="button" class="preset-chip-btn" data-preset="14d">⚡ 14 ngày gần nhất</button>
+              <button type="button" class="preset-chip-btn active" data-preset="month-10">📆 Tháng 10/2026</button>
+              <button type="button" class="preset-chip-btn" data-preset="month-11">📆 Tháng 11/2026</button>
+              <button type="button" class="preset-chip-btn" data-preset="q3">📊 Quý 3 (T7-T9)</button>
+              <button type="button" class="preset-chip-btn" data-preset="q4">📊 Quý 4 (T10-T12)</button>
+            </div>
+
+            <!-- Lưới chọn Tháng chi tiết (Tháng 1 -> Tháng 12) -->
+            <div style="font-size:11.5px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">
+              Chọn nhanh theo Tháng trong năm:
+            </div>
+            <div class="month-picker-grid" id="scanMonthGrid">
+              <button type="button" class="month-pill-btn" data-month="01">Tháng 01</button>
+              <button type="button" class="month-pill-btn" data-month="02">Tháng 02</button>
+              <button type="button" class="month-pill-btn" data-month="03">Tháng 03</button>
+              <button type="button" class="month-pill-btn" data-month="04">Tháng 04</button>
+              <button type="button" class="month-pill-btn" data-month="05">Tháng 05</button>
+              <button type="button" class="month-pill-btn" data-month="06">Tháng 06</button>
+              <button type="button" class="month-pill-btn" data-month="07">Tháng 07</button>
+              <button type="button" class="month-pill-btn" data-month="08">Tháng 08</button>
+              <button type="button" class="month-pill-btn" data-month="09">Tháng 09</button>
+              <button type="button" class="month-pill-btn active" data-month="10">Tháng 10</button>
+              <button type="button" class="month-pill-btn" data-month="11">Tháng 11</button>
+              <button type="button" class="month-pill-btn" data-month="12">Tháng 12</button>
+            </div>
+
+            <!-- Chọn theo Ngày cụ thể (Từ ngày -> Đến ngày) -->
+            <div class="form-row-2" style="margin-top:12px;">
+              <div class="form-group">
+                <label>Từ ngày cụ thể (Date From)</label>
+                <input type="date" id="scanDateFrom" value="2026-10-01" />
+              </div>
+              <div class="form-group">
+                <label>Đến ngày cụ thể (Date To)</label>
+                <input type="date" id="scanDateTo" value="2026-10-31" />
+              </div>
+            </div>
+          </div>
+
+          <div id="scanProgressBox" style="display:none; background:var(--primary-light); border:1px solid #c7d2fe; padding:12px 14px; border-radius:8px; color:var(--primary); font-weight:600; font-size:13px;">
+            ⏳ Đang thu thập bài đăng, quảng cáo và chạy mô hình Google Gemini phân tích 13 chuyên mục...
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close="scanModal">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="submitScanBtn">
+            🚀 Bắt đầu Quét &amp; Phân tích AI
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: IMPORT CSV / JSON -->
+  <div class="modal-backdrop" id="importModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>📥 Import Dữ Liệu Bài Đăng &amp; Quảng Cáo (JSON / CSV)</h3>
+        <button class="modal-close-btn" data-close="importModal">&times;</button>
+      </div>
+      <form id="importDataForm">
+        <div class="modal-body">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>Tên Kênh / Thương hiệu *</label>
+              <input type="text" id="importChannelName" placeholder="VD: L'AMME Official" required />
+            </div>
+            <div class="form-group">
+              <label>Nền tảng</label>
+              <select id="importPlatform">
+                <option value="facebook">📘 Facebook Fanpage</option>
+                <option value="tiktok">🎵 TikTok</option>
+                <option value="instagram">📸 Instagram</option>
+                <option value="youtube">▶️ YouTube</option>
+                <option value="shopee">🛒 Shopee Video</option>
+                <option value="threads">🧵 Threads</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>Lượt theo dõi (Followers)</label>
+              <input type="number" id="importFollowers" value="150000" />
+            </div>
+            <div class="form-group">
+              <label>Danh mục</label>
+              <input type="text" id="importCategory" value="Fashion & Retail" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Chọn file JSON hoặc CSV (Xuất từ Apify / Meta Business / TikTok)</label>
+            <input type="file" id="importFileInput" accept=".json,.csv" />
+          </div>
+
+          <div class="form-group">
+            <label>Hoặc dán trực tiếp mảng JSON bài đăng (`posts`)</label>
+            <textarea
+              id="importJsonTextarea"
+              rows="5"
+              placeholder='[{"caption": "Bài đăng mẫu...", "format": "Reel", "views": 15200, "reactions": 120, "comments": 35, "shares": 8, "transcript": "Lời thoại video..."}]'
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close="importModal">Đóng</button>
+          <button type="submit" class="btn btn-primary" id="submitImportBtn">
+            ⚡ Tạo Báo Cáo từ Dữ Liệu Import
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: CẤU HÌNH API KEYS (GEMINI API, APIFY, RAPIDAPI) -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>⚙️ Cấu Hình Kết Nối API (Google Gemini &amp; Apify / RapidAPI)</h3>
+        <button class="modal-close-btn" data-close="settingsModal">&times;</button>
+      </div>
+      <form id="settingsForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>1. Google Gemini API Key (Phân tích 13 chuyên mục chiến lược &amp; So sánh đa kênh)</label>
+            <input
+              type="password"
+              id="cfgGeminiKey"
+              placeholder="AIzaSy... (Để trống nếu giữ nguyên key đã lưu)"
+            />
+            <small id="cfgGeminiStatus" style="color:var(--text-muted); font-size:11.5px;"></small>
+          </div>
+
+          <div class="form-group">
+            <label>Mô hình Gemini sử dụng</label>
+            <select id="cfgGeminiModel">
+              <option value="gemini-2.5-flash">gemini-2.5-flash (Nhanh, ổn định — Khuyến nghị cho Báo cáo 13 mục)</option>
+              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Gemini 3.1 Pro — Chuyên sâu cho Audit chiến lược lớn)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>2. Apify API Token (Quét tự động Fanpage, Ads Library, TikTok, Instagram, YouTube)</label>
+            <input
+              type="password"
+              id="cfgApifyToken"
+              placeholder="apify_api_... (Tùy chọn - Tự động quét bài đăng, quảng cáo & SRT)"
+            />
+            <small id="cfgApifyStatus" style="color:var(--text-muted); font-size:11.5px;"></small>
+          </div>
+
+          <div class="form-group">
+            <label>3. RapidAPI Key (Dự phòng quét đa kênh tốc độ cao)</label>
+            <input
+              type="password"
+              id="cfgRapidKey"
+              placeholder="Nhập X-RapidAPI-Key..."
+            />
+            <small id="cfgRapidStatus" style="color:var(--text-muted); font-size:11.5px;"></small>
+          </div>
+
+          <div id="cfgTestResultBox" style="display:none; margin-bottom:12px; padding:10px 12px; border-radius:8px; font-size:12.5px; font-weight:600;"></div>
+
+          <div style="background:var(--bg-page); border:1px solid var(--border-color); border-radius:8px; padding:12px; font-size:12px; color:var(--text-secondary);">
+            💡 <strong>Chế độ Hoạt động Kép (Hybrid Smart Mode):</strong> Ngay cả khi bạn chưa nhập Apify/RapidAPI Token, bạn vẫn có thể nhập bất kỳ link kênh nào vào mục <em>Quét Kênh Mới</em> — hệ thống sẽ kích hoạt Smart Channel Simulation kết hợp với Google Gemini để sinh báo cáo đầy đủ.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="testApiKeyBtn">🔍 Kiểm tra Key</button>
+          <button type="button" class="btn btn-outline" data-close="settingsModal">Đóng</button>
+          <button type="submit" class="btn btn-primary">💾 Lưu Cấu Hình</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: XEM NHANH BÀI ĐĂNG / QUẢNG CÁO KHI CLICK VÀO CHIP (BÀI X / QUẢNG CÁO Y) -->
+  <div class="modal-backdrop" id="previewRefModal">
+    <div class="modal-dialog" style="max-width:760px;">
+      <div class="modal-header">
+        <h3 id="previewRefTitle">Chi tiết Bài đăng / Quảng cáo</h3>
+        <button class="modal-close-btn" data-close="previewRefModal">&times;</button>
+      </div>
+      <div class="modal-body" id="previewRefBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close="previewRefModal">Đóng</button>
+        <button type="button" class="btn btn-primary" id="scrollToOriginalCardBtn">
+          📍 Cuộn tới vị trí trên Báo cáo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: AI PHÂN TÍCH CHUYÊN SÂU TỪNG BÀI VIẾT (CÂU HOOK, PHONG CÁCH CONTENT & ĐÁNH GIÁ HIỆU QUẢ) -->
+  <div class="modal-backdrop" id="deepPostAuditModal">
+    <div class="modal-dialog" style="max-width:860px;">
+      <div class="modal-header">
+        <h3 id="deepPostAuditTitle">🧠 Phân Tích Chuyên Sâu Bài Viết: Câu Hook, Phong Cách Content &amp; Hiệu Quả</h3>
+        <button class="modal-close-btn" data-close="deepPostAuditModal">&times;</button>
+      </div>
+      <div class="modal-body" id="deepPostAuditBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close="deepPostAuditModal">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
+
